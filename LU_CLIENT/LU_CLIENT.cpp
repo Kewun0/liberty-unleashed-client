@@ -7,6 +7,7 @@
 #include <enet/enet.h>
 #include <io.h>
 #include <stdlib.h>
+#include <map>
 #include "extensions/ScriptCommands.h"
 #include "CWorld.h"
 
@@ -38,6 +39,63 @@ void SendPacket(ENetPeer* peer, const char* data)
 {
     ENetPacket* packet = enet_packet_create(data, strlen(data) + 1, ENET_PACKET_FLAG_RELIABLE);
     enet_peer_send(peer, 0, packet);
+}
+
+class Clients
+{
+private:
+    int m_id;
+    std::string m_username;
+
+public:
+    Clients(int id) : m_id(id) {}
+
+    void SetUsername(std::string username) { m_username = username; }
+
+    int GetID() { return m_id; }
+    std::string GetUsername() { return m_username; }
+};
+std::map client_map;
+
+int CLIENT_ID = -1;
+void ParseData(char* data)
+{
+    // Will store the data type (e.g. 1, 2, etc)
+    int data_type;
+
+    // Will store the id of the client that is sending the data
+    int id;
+
+    // Get first two numbers from the data (data_type and id) and but them in their respective variables
+    sscanf(data, "%d|%d", &data_type, &id);
+
+    // Switch between the different data_types
+    switch (data_type)
+    {
+    case 1: // data is a message
+        if (id != CLIENT_ID)
+        {
+            // Get message and Post it using the ClientData at id's username and the parsed msg.
+            char msg[80];
+            sscanf(data, "%*d|%*d|%[^|]", &msg);
+           // chatScreen.PostMessage(client_map[id]->GetUsername().c_str(), msg);
+        }
+        break;
+    case 2: // data is a username
+        if (id != CLIENT_ID)
+        {
+            // Create a new ClientData with username and add it to map at id.
+            char username[80];
+            sscanf(data, "%*d|%*d|%[^|]", &username);
+
+            client_map[id] = new Clients(id);
+            client_map[id]->SetUsername(username);
+        }
+        break;
+    case 3: // data is our ID.
+        CLIENT_ID = id; // Set our id to the received id.
+        break;
+    }
 }
  
 DWORD WINAPI LUThread(HMODULE hModule)

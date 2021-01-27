@@ -16,13 +16,13 @@
 #pragma warning(disable: 4996)
 
 #pragma comment(lib,"ws2_32.lib")
-#pragma comment(lib,"winmm.lib")
+#pragma comment(lib,"winmm.lib") 
 
 ENetHost* client;
-ENetAddress address;
+ENetAddress address; 
 ENetEvent event;
 ENetPeer* peer;
-
+ 
 char nickname[64]; 
 char ip[64]; 
 char port[16];

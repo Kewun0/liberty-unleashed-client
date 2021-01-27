@@ -26,7 +26,7 @@ ENetPeer* peer;
 char nickname[64]; 
 char ip[64]; 
 char port[16];
-
+ 
 bool IsConnectedToServer = false;
 
 
@@ -34,6 +34,12 @@ using namespace plugin;
 int init = 0;
 FILE* file;
 
+void SendPacket(ENetPeer* peer, const char* data)
+{
+    ENetPacket* packet = enet_packet_create(data, strlen(data) + 1, ENET_PACKET_FLAG_RELIABLE);
+    enet_peer_send(peer, 0, packet);
+}
+ 
 DWORD WINAPI LUThread(HMODULE hModule)
 {
     if (enet_initialize() != 0)
@@ -68,12 +74,31 @@ DWORD WINAPI LUThread(HMODULE hModule)
     {
         printf("Connection Successful. Loading server info...\n");
         IsConnectedToServer = true;
+
+        char str_data[80] = "2|";
+        strcat(str_data, nickname);
+        SendPacket(peer, str_data);
     }
     else
     {
         printf("You failed to connect to the server. \n");
         enet_peer_reset(peer);
         IsConnectedToServer = false;
+    }
+
+    while (enet_host_service(client, &event, 1000) > 0)
+    {
+        switch (event.type)
+        {
+        case ENET_EVENT_TYPE_RECEIVE:
+            printf("A packet of length %u containing %s was received from %x:%u on channel %u.\n",
+                event.packet->dataLength,
+                event.packet->data,
+                event.peer->address.host,
+                event.peer->address.port,
+                event.channelID);
+            break;
+        }
     }
 
     while (1 != 2)
@@ -97,6 +122,8 @@ public:
     {
         AllocConsole();
         freopen("CONOUT$", "w", stdout);
+
+        sprintf(nickname, "Kewun");
 
         patch::SetInt(0x582A8B, 208145899); // Skip Movies
         patch::Nop(0x582C26, 5); // Skip Movies

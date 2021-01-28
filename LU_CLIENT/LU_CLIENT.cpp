@@ -11,6 +11,7 @@
 #include <enet/enet.h>
 #include <io.h>
 #include <stdlib.h>
+#include <chrono>
 #include <map>
 
 #pragma comment(lib,"enet.lib")
@@ -29,6 +30,8 @@ ENetPeer* peer;
 char nickname[64]; 
 char ip[64]; 
 char port[16];
+
+int64 last_sync_packet = 0;
  
 bool IsConnectedToServer = false;
 
@@ -144,7 +147,28 @@ void ParseData(char* data)
         break;
     }
 }
- 
+
+DWORD WINAPI SyncThread(HMODULE hModule)
+{
+    while (1 != 2)
+    {
+        if (IsConnectedToServer)
+        {
+            if (FindPlayerPed())
+            {
+                if (FindPlayerPed()->m_fHealth != 0)
+                {
+                    char sync_packet[6];
+                    sprintf(sync_packet, "8|%i", (int)FindPlayerPed()->m_fHealth);
+                    SendPacket(peer, sync_packet);
+                    Sleep(400);
+                }
+            }
+        }
+    }
+    return 0;
+}
+
 DWORD WINAPI LUThread(HMODULE hModule)
 {
     if (enet_initialize() != 0)
@@ -191,11 +215,12 @@ DWORD WINAPI LUThread(HMODULE hModule)
         IsConnectedToServer = false;
     }
 
-    while (enet_host_service(client, &event, 1000) > 0)
+    while (enet_host_service(client, &event, 5000) > 0)
     {
         switch (event.type)
         {
         case ENET_EVENT_TYPE_RECEIVE:
+            last_sync_packet = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
             printf("A packet of length %u containing %s was received from %x:%u on channel %u.\n",
                 event.packet->dataLength,
                 event.packet->data,
@@ -219,6 +244,27 @@ void CCamera_SetCamPositionForFixedMode(CVector const& vecFixedModeSource, CVect
     plugin::CallMethod<0x46BA72, CCamera*, CVector const&, CVector const&>(&TheCamera, vecFixedModeSource, vecFixedModeUpOffSet);
 }
 
+void LostConnection()
+{
+    IsConnectedToServer = false;
+    enet_peer_disconnect(peer, 0);
+    printf("You have lost connection to the server\n");
+}
+
+void ProcessSync()
+{
+    unsigned __int64 now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    
+    int64 test = last_sync_packet - now;
+
+    if (test <= -10000)
+    {
+        if (IsConnectedToServer)
+        {
+            LostConnection();
+        }
+    }
+}
 
 class LU_CLIENT
 {
@@ -264,11 +310,6 @@ public:
                 , 5);
         }};
 
-        Events::initScriptsEvent += []
-        {
-            
-        };
-
         Events::processScriptsEvent += []
         {
             if (FindPlayerPed())
@@ -277,6 +318,8 @@ public:
             }
             *(INT*)0x8F4374 = 60;
             *(BYTE*)0x5F2E60 = 1;
+
+            ProcessSync();
         };
 
         Events::initGameEvent += []
@@ -286,6 +329,7 @@ public:
             CWorld::Players[0].m_bInfiniteSprint = true;
 
             CloseHandle(CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)LUThread, NULL, 0, nullptr));
+            CloseHandle(CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)SyncThread, NULL, 0, nullptr));
         };
         
     }

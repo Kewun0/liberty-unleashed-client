@@ -185,8 +185,10 @@ DWORD WINAPI LUThread(HMODULE hModule)
         ExitProcess(1);
     }
 
-    enet_address_set_host(&address, "127.0.0.1");
-    address.port = 7777;
+    int xport;
+    sscanf(port, "%d", &xport);
+    enet_address_set_host(&address, ip);
+    address.port = xport;
 
     peer = enet_host_connect(client, &address, 1, 0);
     if (peer == NULL)
@@ -197,13 +199,13 @@ DWORD WINAPI LUThread(HMODULE hModule)
     }
 
     printf("Welcome to Liberty Unleashed 0.1\n");
-    printf("Connecting to server 127.0.0.1:7777...\n");
+    printf("Connecting to server %s:%s...\n",ip,port);
 
     if (enet_host_service(client, &event, 5000) > 0 && event.type == ENET_EVENT_TYPE_CONNECT)
     {
         printf("Connection Successful. Loading server info...\n");
-        IsConnectedToServer = true;
 
+        IsConnectedToServer = true;
         char str_data[80] = "2|";
         strcat(str_data, nickname);
         SendPacket(peer, str_data);
@@ -266,11 +268,63 @@ void ProcessSync()
     }
 }
 
+void SetStringFromCommandLine(char* szCmdLine, char* szString)
+{
+    while (*szCmdLine == ' ')
+    {
+        szCmdLine++;
+    }
+
+    while (*szCmdLine && *szCmdLine != ' ' && *szCmdLine != '-' && *szCmdLine != '/')
+    {
+        *szString = *szCmdLine;
+        szString++; szCmdLine++;
+    }
+
+    *szString = '\0';
+}
+
+
+void InitSettings()
+{
+    char* szCmdLine = GetCommandLine();
+
+    while (*szCmdLine)
+    {
+        if (*szCmdLine == '-' || *szCmdLine == '/')
+        {
+            szCmdLine++;
+            switch (*szCmdLine)
+            {
+            case 'h':
+            case 'H':
+                szCmdLine++;
+                SetStringFromCommandLine(szCmdLine, ip);
+                break;
+            case 'p':
+            case 'P':
+                szCmdLine++;
+                SetStringFromCommandLine(szCmdLine, port);
+                break;
+            case 'n':
+            case 'N':
+                szCmdLine++;
+                SetStringFromCommandLine(szCmdLine, nickname);
+                break;
+            }
+        }
+        szCmdLine++;
+    }
+}
+
+
 class LU_CLIENT
 {
 public:
     LU_CLIENT()
     {
+        InitSettings();
+
         AllocConsole();
         freopen("CONOUT$", "w", stdout);
 

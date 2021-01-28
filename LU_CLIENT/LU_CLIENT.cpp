@@ -3,13 +3,15 @@
 
 #include "plugin.h"
 #include "CMenuManager.h"
+#include "extensions/ScriptCommands.h"
+#include "CWorld.h"
+
 #include <stdio.h>
+#include <thread>
 #include <enet/enet.h>
 #include <io.h>
 #include <stdlib.h>
 #include <map>
-#include "extensions/ScriptCommands.h"
-#include "CWorld.h"
 
 #pragma comment(lib,"enet.lib")
 #pragma warning(disable: 4018)
@@ -32,7 +34,9 @@ bool IsConnectedToServer = false;
 
 
 using namespace plugin;
+
 int init = 0;
+
 FILE* file;
 
 void SendPacket(ENetPeer* peer, const char* data)
@@ -55,7 +59,50 @@ public:
     int GetID() { return m_id; }
     std::string GetUsername() { return m_username; }
 };
-std::map client_map;
+std::map<int, Clients*> client_map;
+
+class Timer {
+    bool clear = false;
+
+public:
+    template<typename Function>
+    void setTimeout(Function function, int delay);
+
+    template<typename Function>
+    void setInterval(Function function, int interval);
+
+    void stop();
+};
+
+void Timer::stop() {
+    this->clear = true;
+}
+template<typename Function>
+void Timer::setTimeout(Function function, int delay) {
+    this->clear = false;
+    std::thread t([=]() {
+
+        if (this->clear) return;
+        std::this_thread::sleep_for(std::chrono::milliseconds(delay));
+        if (this->clear) return;
+        function();
+        });
+    t.detach();
+}
+template<typename Function>
+void Timer::setInterval(Function function, int interval) {
+    this->clear = false;
+    std::thread t([=]() {
+        while (true) {
+            if (this->clear) return;
+            std::this_thread::sleep_for(std::chrono::milliseconds(interval));
+            if (this->clear) return;
+            function();
+        }
+        });
+    t.detach();
+}
+
 
 int CLIENT_ID = -1;
 void ParseData(char* data)

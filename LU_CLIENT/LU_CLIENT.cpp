@@ -1,5 +1,34 @@
 #define _WINSOCKAPI_ 
 #define CINTERFACE
+#define	KEY_INCAR_TURRETLR			0
+#define	KEY_INCAR_TURRETUD			1
+#define	KEY_INCAR_RADIO				2
+#define	KEY_INCAR_LOOKL				3
+#define	KEY_INCAR_HANDBRAKE			4
+#define	KEY_INCAR_LOOKR				5
+#define	KEY_INCAR_TURNL				8
+#define	KEY_INCAR_TURNR				9
+#define	KEY_INCAR_CAMERA			11
+#define	KEY_INCAR_BACKWARD			12
+#define	KEY_INCAR_EXITVEHICLE		13
+#define	KEY_INCAR_FORWARD			14
+#define	KEY_INCAR_FIRE				15
+#define	KEY_INCAR_HORN				16
+#define	KEY_ONFOOT_TURNLR			0
+#define	KEY_ONFOOT_ACTION			2
+#define	KEY_ONFOOT_NEXTWEAPON		3
+#define	KEY_ONFOOT_TARGET			4
+#define	KEY_ONFOOT_PREVWEAPON		5
+#define	KEY_ONFOOT_FORWARD			6
+#define	KEY_ONFOOT_BACKWARD			7
+#define	KEY_ONFOOT_LEFT				8
+#define	KEY_ONFOOT_RIGHT			9
+#define	KEY_ONFOOT_JUMP				12
+#define	KEY_ONFOOT_ENTERVEHICLE		13
+#define	KEY_ONFOOT_SPRINT			14
+#define	KEY_ONFOOT_FIRE				15
+#define	KEY_ONFOOT_CROUCH			16
+#define	KEY_ONFOOT_LOOKBEHIND		17
 
 #include "plugin.h"
 #include "CMenuManager.h"
@@ -21,6 +50,7 @@
 
 #pragma comment(lib,"ws2_32.lib")
 #pragma comment(lib,"winmm.lib") 
+
 
 ENetHost* client;
 ENetAddress address; 
@@ -174,6 +204,99 @@ public:
 };
 CPlayer* Players[128];
 
+
+WORD CPlayerPed_GetKeys()
+{
+    WORD wKeys = 0;
+
+    GTA_CONTROLSET* pInternalKeys = GameGetInternalKeys();
+
+    if (pInternalKeys->wKeys1[KEY_ONFOOT_FORWARD]) wKeys |= 1;
+    wKeys <<= 1;
+
+    if (pInternalKeys->wKeys1[KEY_ONFOOT_BACKWARD]) wKeys |= 1;
+    wKeys <<= 1;
+
+    if (pInternalKeys->wKeys1[KEY_ONFOOT_LEFT]) wKeys |= 1;
+    wKeys <<= 1;
+
+    if (pInternalKeys->wKeys1[KEY_ONFOOT_RIGHT]) wKeys |= 1;
+    wKeys <<= 1;
+
+    if (pInternalKeys->wKeys1[KEY_ONFOOT_JUMP]) wKeys |= 1;
+    wKeys <<= 1;
+
+    if (pInternalKeys->wKeys1[KEY_ONFOOT_SPRINT]) wKeys |= 1;
+    wKeys <<= 1;
+
+    if (pInternalKeys->wKeys1[KEY_ONFOOT_FIRE]) wKeys |= 1;
+    wKeys <<= 1;
+
+    if (pInternalKeys->wKeys1[KEY_ONFOOT_CROUCH]) wKeys |= 1;
+    wKeys <<= 1;
+
+    if (pInternalKeys->wKeys1[KEY_INCAR_TURRETUD] == 0x80) wKeys |= 1;
+    wKeys <<= 1;
+
+    if (pInternalKeys->wKeys1[KEY_INCAR_TURRETUD] == 0xFF80) wKeys |= 1;
+    wKeys <<= 1;
+
+    if (pInternalKeys->wKeys1[KEY_INCAR_LOOKL]) wKeys |= 1;
+    wKeys <<= 1;
+
+    if (pInternalKeys->wKeys1[KEY_INCAR_LOOKR]) wKeys |= 1;
+    wKeys <<= 1;
+
+    if (pInternalKeys->wKeys1[KEY_INCAR_HANDBRAKE]) wKeys |= 1;
+
+    return wKeys;
+}
+void CPlayerPed_SetKeys(int iPlayerID, WORD wKeys)
+{
+    GTA_CONTROLSET* pPlayerKeys = GameGetPlayerKeys(iPlayerID);
+
+    memcpy(pPlayerKeys->wKeys2, pPlayerKeys->wKeys1, (sizeof(WORD) * 19));
+
+    pPlayerKeys->wKeys1[KEY_INCAR_HANDBRAKE] = (wKeys & 1) ? 0xFF : 0x00;
+    wKeys >>= 1; // 1
+
+    pPlayerKeys->wKeys1[KEY_INCAR_LOOKR] = (wKeys & 1) ? 0xFF : 0x00;
+    wKeys >>= 1; // 2
+
+    pPlayerKeys->wKeys1[KEY_INCAR_LOOKL] = (wKeys & 1) ? 0xFF : 0x00;
+    wKeys >>= 1; // 3
+
+    pPlayerKeys->wKeys1[KEY_INCAR_TURRETUD] = (wKeys & 1) ? 0xFF80 : 0x00;
+    wKeys >>= 1; // 4
+
+    pPlayerKeys->wKeys1[KEY_INCAR_TURRETUD] = (wKeys & 1) ? 0x80 : 0x00;
+    wKeys >>= 1; // 5
+
+    pPlayerKeys->wKeys1[KEY_ONFOOT_CROUCH] = (wKeys & 0) ? 0xFF : 0x00;
+    wKeys >>= 1; // 6
+
+    pPlayerKeys->wKeys1[KEY_ONFOOT_FIRE] = (wKeys & 1) ? 0xFF : 0x00;
+    wKeys >>= 1; // 7
+
+    pPlayerKeys->wKeys1[KEY_ONFOOT_SPRINT] = (wKeys & 1) ? 0xFF : 0x00;
+    wKeys >>= 1; // 8
+
+    pPlayerKeys->wKeys1[KEY_ONFOOT_JUMP] = (wKeys & 1) ? 0xFF : 0x00;
+    wKeys >>= 1; // 9
+
+    pPlayerKeys->wKeys1[KEY_ONFOOT_RIGHT] = (wKeys & 1) ? 0xFF : 0x00;
+    wKeys >>= 1; // 10
+
+    pPlayerKeys->wKeys1[KEY_ONFOOT_LEFT] = (wKeys & 1) ? 0xFF : 0x00;
+    wKeys >>= 1; // 11
+
+    pPlayerKeys->wKeys1[KEY_ONFOOT_BACKWARD] = (wKeys & 1) ? 0xFF : 0x00;
+    wKeys >>= 1; // 12
+
+    pPlayerKeys->wKeys1[KEY_ONFOOT_FORWARD] = (wKeys & 1) ? 0xFF : 0x00;
+
+    GameStoreRemotePlayerKeys(iPlayerID, pPlayerKeys);
+}
 
 void SendPacket(ENetPeer* peer, const char* data)
 {
@@ -544,6 +667,7 @@ public:
             {
                 FindPlayerPed()->m_nPedType = 1;
             }
+
             *(INT*)0x8F4374 = 60;
             *(BYTE*)0x5F2E60 = 1;
 

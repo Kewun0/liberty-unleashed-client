@@ -44,6 +44,7 @@
 #include "CWorld.h"
 #include "ePedPieceTypes.h"
 #include "CCamera.h"
+#include "CHud.h"
 
 #include <stdio.h>
 #include <thread>
@@ -612,6 +613,15 @@ DWORD WINAPI SyncThread(HMODULE hModule)
     return 0;
 }
 
+wchar_t* stws(std::string my_shit)
+{
+    std::wstring widestr;
+    for (int i = 0; i < my_shit.length(); ++i)
+        widestr += wchar_t(my_shit[i]);
+    const wchar_t* your_result = widestr.c_str();
+    return (wchar_t*)your_result;
+}
+
 DWORD WINAPI LUThread(HMODULE hModule)
 {
     if (enet_initialize() != 0)
@@ -641,13 +651,16 @@ DWORD WINAPI LUThread(HMODULE hModule)
         ExitProcess(1);
     }
 
+
+    CHud::SetHelpMessage(stws(Format(" Connecting to %s:%s...", ip, port)), false);
+
     printf("Welcome to Liberty Unleashed 0.1\n");
     printf("Connecting to server %s:%s...\n",ip,port);
 
     if (enet_host_service(client, &event, 5000) > 0 && event.type == ENET_EVENT_TYPE_CONNECT)
     {
         printf("Connection Successful. Loading server info...\n");
-
+        CHud::SetHelpMessage(stws(Format(" Connection successful. Loading game", ip, port)), false);
         IsConnectedToServer = true;
         char str_data[80] = "2|";
         strcat(str_data, nickname);
@@ -655,6 +668,7 @@ DWORD WINAPI LUThread(HMODULE hModule)
     }
     else
     {
+        CHud::SetHelpMessage(stws(Format(" You failed to connect to the server", ip, port)), false);
         printf("You failed to connect to the server. \n");
         enet_peer_reset(peer);
         IsConnectedToServer = false;
@@ -759,6 +773,10 @@ void InitSettings()
     }
 }
 
+const char* my_fun(const char* par)
+{
+    return par;
+}
 
 class LU_CLIENT
 {
@@ -789,8 +807,9 @@ public:
 
         Events::initRwEvent += []
         {
-
             srand(time(NULL));
+
+         //   Hook((void*)0x52BFB0, (void*)my_fun, 5); // fix missing text
 
             GameKeyStatesInit();
             InstallMethodHook(0x5FA308, (DWORD)CPlayerPed_ProcessControl_Hook);
@@ -803,7 +822,10 @@ public:
                 sprintf(loadsc4, "lu");
             }
 
-            memcpy((char*)0x5F55E0, loadsc4, sizeof(loadsc4));
+            char missing[3] = "%s";
+
+            memcpy((char*)0x600200, missing, sizeof(missing)); // fix missing text
+            memcpy((char*)0x5F55E0, loadsc4, sizeof(loadsc4)); // custom load scr
         };
 
         Events::menuDrawingEvent += [] { if (init == 0) {

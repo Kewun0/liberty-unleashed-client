@@ -29,11 +29,21 @@
 #define	KEY_ONFOOT_FIRE				15
 #define	KEY_ONFOOT_CROUCH			16
 #define	KEY_ONFOOT_LOOKBEHIND		17
+#define FUNC_CPlayerPed__ProcessControl 0x4EFD90
+#define FUNC_CWeapon__DoBulletImpact 0x55F950
+#define FUNC_CAutomobile__ProcessControl 0x531470
+#define _pad(x,y) BYTE x[y]
+#define ADDR_KEYSTATES 0x6F0360
+#define NUDE void _declspec(naked) 
+
+
 
 #include "plugin.h"
 #include "CMenuManager.h"
 #include "extensions/ScriptCommands.h"
 #include "CWorld.h"
+#include "ePedPieceTypes.h"
+#include "CCamera.h"
 
 #include <stdio.h>
 #include <thread>
@@ -61,13 +71,33 @@ char nickname[64];
 char ip[64]; 
 char port[16];
 
+DWORD myPlayer = 0;
+DWORD FHCore = 0;
+DWORD dwStackFrame = 0;
+DWORD dwCurPlayerActor = 0;
+
+
 int64 last_sync_packet = 0;
  
 bool IsConnectedToServer = false;
 
 BYTE byteCurPlayer = 0;
-DWORD dwStackFrame = 0;
-DWORD dwCurPlayerActor = 0;
+BYTE* pbyteCurrentPlayer = (BYTE*)0x95CD61;
+BYTE	     byteSavedCameraMode = 0;
+BYTE* pbyteCameraMode = (BYTE*)0x5F03D8;
+
+const FARPROC ProcessOneCommand = (FARPROC)0x439500;
+
+CPed* (__cdecl* original_FindPlayerPed)(void);
+
+WORD CPlayerPed_GetKeys();
+
+char(__thiscall* original_CPed__InflictDamage)(CPed*, CEntity*, eWeaponType, float, ePedPieceTypes, UCHAR);
+
+int(__thiscall* original_CPlayerPed__ProcessControl)(CPlayerPed*);
+int(__thiscall* original_CAutomobile__ProcessControl)(CAutomobile*);
+int(__thiscall* original_CWeapon__DoBulletImpact)(CWeapon* This, CEntity*, CEntity*, CVector*, CVector*, CColPoint*, CVector2D);
+
 
 using namespace plugin;
 
@@ -75,10 +105,7 @@ int init = 0;
 int CLIENT_ID = -1;
 
 FILE* file;
-
-#define _pad(x,y) BYTE x[y]
-#define ADDR_KEYSTATES 0x6F0360
-
+void _stdcall SwitchContext(DWORD dwPedPtr, bool bPrePost);
 typedef struct _GTA_CONTROLSET
 {
     DWORD dwFrontPad;
@@ -204,98 +231,125 @@ public:
 };
 CPlayer* Players[128];
 
-
-WORD CPlayerPed_GetKeys()
+BYTE FindPlayerNumFromPedPtr(DWORD dwPedPtr)
 {
-    WORD wKeys = 0;
+    CPlayerPed* ped = (CPlayerPed*)dwPedPtr;
 
-    GTA_CONTROLSET* pInternalKeys = GameGetInternalKeys();
+    for (BYTE i = 0; i < 50; i++)
+    {
+        if (CWorld::Players[i].m_pPed)
+        {
+            if (CWorld::Players[i].m_pPed == ped)
+            {
+                return i;
+            }
+        }
+    }
 
-    if (pInternalKeys->wKeys1[KEY_ONFOOT_FORWARD]) wKeys |= 1;
-    wKeys <<= 1;
-
-    if (pInternalKeys->wKeys1[KEY_ONFOOT_BACKWARD]) wKeys |= 1;
-    wKeys <<= 1;
-
-    if (pInternalKeys->wKeys1[KEY_ONFOOT_LEFT]) wKeys |= 1;
-    wKeys <<= 1;
-
-    if (pInternalKeys->wKeys1[KEY_ONFOOT_RIGHT]) wKeys |= 1;
-    wKeys <<= 1;
-
-    if (pInternalKeys->wKeys1[KEY_ONFOOT_JUMP]) wKeys |= 1;
-    wKeys <<= 1;
-
-    if (pInternalKeys->wKeys1[KEY_ONFOOT_SPRINT]) wKeys |= 1;
-    wKeys <<= 1;
-
-    if (pInternalKeys->wKeys1[KEY_ONFOOT_FIRE]) wKeys |= 1;
-    wKeys <<= 1;
-
-    if (pInternalKeys->wKeys1[KEY_ONFOOT_CROUCH]) wKeys |= 1;
-    wKeys <<= 1;
-
-    if (pInternalKeys->wKeys1[KEY_INCAR_TURRETUD] == 0x80) wKeys |= 1;
-    wKeys <<= 1;
-
-    if (pInternalKeys->wKeys1[KEY_INCAR_TURRETUD] == 0xFF80) wKeys |= 1;
-    wKeys <<= 1;
-
-    if (pInternalKeys->wKeys1[KEY_INCAR_LOOKL]) wKeys |= 1;
-    wKeys <<= 1;
-
-    if (pInternalKeys->wKeys1[KEY_INCAR_LOOKR]) wKeys |= 1;
-    wKeys <<= 1;
-
-    if (pInternalKeys->wKeys1[KEY_INCAR_HANDBRAKE]) wKeys |= 1;
-
-    return wKeys;
+    return 0;
 }
-void CPlayerPed_SetKeys(int iPlayerID, WORD wKeys)
+
+int __fastcall CWeapon__DoBulletImpact_Hook(CWeapon* This, DWORD _EDX, CEntity* source, CEntity* target, CVector* start, CVector* end, CColPoint* colpoint, CVector2D ahead)
 {
-    GTA_CONTROLSET* pPlayerKeys = GameGetPlayerKeys(iPlayerID);
+    return original_CWeapon__DoBulletImpact(This, source, target, start, end, colpoint, ahead);
+}
 
-    memcpy(pPlayerKeys->wKeys2, pPlayerKeys->wKeys1, (sizeof(WORD) * 19));
+void InstallMethodHook(DWORD dwInstallAddress, DWORD dwHookFunction)
+{
+    DWORD dwVP, dwVP2;
+    VirtualProtect((LPVOID)dwInstallAddress, 4, PAGE_EXECUTE_READWRITE, &dwVP);
+    *(PDWORD)dwInstallAddress = (DWORD)dwHookFunction;
+    VirtualProtect((LPVOID)dwInstallAddress, 4, dwVP, &dwVP2);
+}
 
-    pPlayerKeys->wKeys1[KEY_INCAR_HANDBRAKE] = (wKeys & 1) ? 0xFF : 0x00;
-    wKeys >>= 1; // 1
+char __fastcall CPlayerPed__ProcessControl_Hook(CPlayerPed* This, DWORD _EDX)
+{
+    return original_CPlayerPed__ProcessControl(This);
+}
 
-    pPlayerKeys->wKeys1[KEY_INCAR_LOOKR] = (wKeys & 1) ? 0xFF : 0x00;
-    wKeys >>= 1; // 2
+bool Hook(void* toHook, void* ourFunct, int len)
+{
+    if (len < 5) {
+        return false;
+    }
+    DWORD curProtection;
+    VirtualProtect(toHook, len, PAGE_EXECUTE_READWRITE, &curProtection);
+    memset(toHook, 0x90, len);
+    DWORD relativeAddress = ((DWORD)ourFunct - (DWORD)toHook) - 5;
+    *(BYTE*)toHook = 0xE9;
+    *(DWORD*)((DWORD)toHook + 1) = relativeAddress;
+    DWORD temp;
+    VirtualProtect(toHook, len, curProtection, &temp);
+    return true;
+}
 
-    pPlayerKeys->wKeys1[KEY_INCAR_LOOKL] = (wKeys & 1) ? 0xFF : 0x00;
-    wKeys >>= 1; // 3
+void CRender_DrawProgressBar(CRect size, int value, CRGBA color, float max)
+{
+    CRGBA darkbg = color;
+    if (color.r < 65)darkbg.r = 0;
+    else darkbg.r = color.r - 65;
+    if (color.g < 65)darkbg.g = 0;
+    else darkbg.g = color.g - 65;
+    if (color.b < 65)darkbg.b = 0;
+    else darkbg.b = color.b - 65;
+    CSprite2d::DrawRect(CRect(size.left, size.top, size.right, size.bottom), CRGBA(0, 0, 0, 255));
+    CSprite2d::DrawRect(CRect(size.left + 1, size.top + 1, size.right - 1, size.bottom - 1), darkbg);
+    int len = (size.right - size.left);
+    CSprite2d::DrawRect(CRect(size.left + 1, size.top + 1, size.left + ceil((len / max) * value) - 1, size.bottom - 1), color);
+}
 
-    pPlayerKeys->wKeys1[KEY_INCAR_TURRETUD] = (wKeys & 1) ? 0xFF80 : 0x00;
-    wKeys >>= 1; // 4
+CPed* FindPlayerPed_Hook(void)
+{
+    return CWorld::Players[CWorld::PlayerInFocus].m_pPed;
+}
 
-    pPlayerKeys->wKeys1[KEY_INCAR_TURRETUD] = (wKeys & 1) ? 0x80 : 0x00;
-    wKeys >>= 1; // 5
+DWORD        dwFunc = 0;
+NUDE CPlayerPed_ProcessControl_Hook()
+{
+    _asm
+    {
+        mov dwCurPlayerActor, ecx
+        pushad
+    }
 
-    pPlayerKeys->wKeys1[KEY_ONFOOT_CROUCH] = (wKeys & 0) ? 0xFF : 0x00;
-    wKeys >>= 1; // 6
+    SwitchContext(dwCurPlayerActor, true);
 
-    pPlayerKeys->wKeys1[KEY_ONFOOT_FIRE] = (wKeys & 1) ? 0xFF : 0x00;
-    wKeys >>= 1; // 7
+    dwFunc = FUNC_CPlayerPed__ProcessControl;
+    _asm
+    {
+        popad
+        call dwFunc
+        pushad
+    }
 
-    pPlayerKeys->wKeys1[KEY_ONFOOT_SPRINT] = (wKeys & 1) ? 0xFF : 0x00;
-    wKeys >>= 1; // 8
+    SwitchContext(dwCurPlayerActor, false);
 
-    pPlayerKeys->wKeys1[KEY_ONFOOT_JUMP] = (wKeys & 1) ? 0xFF : 0x00;
-    wKeys >>= 1; // 9
+    _asm
+    {
+        popad
+        ret
+    }
+}
 
-    pPlayerKeys->wKeys1[KEY_ONFOOT_RIGHT] = (wKeys & 1) ? 0xFF : 0x00;
-    wKeys >>= 1; // 10
+void InstallHook(DWORD dwInstallAddress, DWORD dwHookFunction, DWORD dwHookStorage,BYTE* pbyteJmpCode, int iJmpCodeSize)
+{
+    DWORD dwVP, dwVP2;
+    VirtualProtect((PVOID)dwHookStorage, 4, PAGE_EXECUTE_READWRITE, &dwVP);
+    *(PDWORD)dwHookStorage = (DWORD)dwHookFunction;
+    VirtualProtect((PVOID)dwHookStorage, 4, dwVP, &dwVP2);
+    VirtualProtect((PVOID)dwInstallAddress, iJmpCodeSize, PAGE_EXECUTE_READWRITE, &dwVP);
+    memcpy((PVOID)dwInstallAddress, pbyteJmpCode, iJmpCodeSize);
+    VirtualProtect((PVOID)dwInstallAddress, iJmpCodeSize, dwVP, &dwVP2);
+}
 
-    pPlayerKeys->wKeys1[KEY_ONFOOT_LEFT] = (wKeys & 1) ? 0xFF : 0x00;
-    wKeys >>= 1; // 11
-
-    pPlayerKeys->wKeys1[KEY_ONFOOT_BACKWARD] = (wKeys & 1) ? 0xFF : 0x00;
-    wKeys >>= 1; // 12
-
-    pPlayerKeys->wKeys1[KEY_ONFOOT_FORWARD] = (wKeys & 1) ? 0xFF : 0x00;
-
-    GameStoreRemotePlayerKeys(iPlayerID, pPlayerKeys);
+void ErasePEHeader(HINSTANCE hModule)
+{
+    MEMORY_BASIC_INFORMATION mbi;
+    VirtualQuery((LPCVOID)hModule, &mbi, sizeof(mbi));
+    VirtualProtect(mbi.BaseAddress, mbi.RegionSize, PAGE_EXECUTE_READWRITE, &mbi.Protect);
+    ZeroMemory((PVOID)hModule, 4096);
+    VirtualProtect(mbi.BaseAddress, mbi.RegionSize, mbi.Protect, NULL);
+    FlushInstructionCache(GetCurrentProcess(), (LPCVOID)mbi.BaseAddress, mbi.RegionSize);
 }
 
 void SendPacket(ENetPeer* peer, const char* data)
@@ -354,6 +408,100 @@ void GameResetLocalKeys()
     memset(pGcsInternalKeys, 0, sizeof(GTA_CONTROLSET));
 }
 
+void _stdcall SwitchContext(DWORD dwPedPtr, bool bPrePost)
+{
+    if (dwPedPtr)
+    {
+        if (FHCore == 0)
+        {
+            myPlayer = dwPedPtr;
+            FHCore = 1;
+        }
+
+        byteCurPlayer = FindPlayerNumFromPedPtr(dwPedPtr);
+
+        if (dwPedPtr != (DWORD)CWorld::Players[0].m_pPed)
+        {
+            if (bPrePost)
+            {
+                GameStoreLocalPlayerKeys();
+                GameSetRemotePlayerKeys(byteCurPlayer);
+                *(CAMERA_AIM*)&TheCamera.m_asCams[TheCamera.m_nActiveCam].m_vecFront = remotePlayerLookFrontX[byteCurPlayer];
+
+                *pbyteCurrentPlayer = byteCurPlayer;
+            }
+            else
+            {
+                *(CAMERA_AIM*)&TheCamera.m_asCams[TheCamera.m_nActiveCam].m_vecFront = localPlayerLookFrontX;
+                *pbyteCurrentPlayer = 0;
+                GameSetLocalPlayerKeys();
+            }
+        }
+    }
+}
+
+WORD CPlayerPed_GetKeys()
+{
+    WORD wKeys = 0;
+    GTA_CONTROLSET* pInternalKeys = GameGetInternalKeys();
+    if (pInternalKeys->wKeys1[KEY_ONFOOT_FORWARD]) wKeys |= 1;
+    wKeys <<= 1;
+    if (pInternalKeys->wKeys1[KEY_ONFOOT_BACKWARD]) wKeys |= 1;
+    wKeys <<= 1;
+    if (pInternalKeys->wKeys1[KEY_ONFOOT_LEFT]) wKeys |= 1;
+    wKeys <<= 1;
+    if (pInternalKeys->wKeys1[KEY_ONFOOT_RIGHT]) wKeys |= 1;
+    wKeys <<= 1;
+    if (pInternalKeys->wKeys1[KEY_ONFOOT_JUMP]) wKeys |= 1;
+    wKeys <<= 1;
+    if (pInternalKeys->wKeys1[KEY_ONFOOT_SPRINT]) wKeys |= 1;
+    wKeys <<= 1;
+    if (pInternalKeys->wKeys1[KEY_ONFOOT_FIRE]) wKeys |= 1;
+    wKeys <<= 1;
+    if (pInternalKeys->wKeys1[KEY_ONFOOT_CROUCH]) wKeys |= 1;
+    wKeys <<= 1;
+    if (pInternalKeys->wKeys1[KEY_INCAR_TURRETUD] == 0x80) wKeys |= 1;
+    wKeys <<= 1;
+    if (pInternalKeys->wKeys1[KEY_INCAR_TURRETUD] == 0xFF80) wKeys |= 1;
+    wKeys <<= 1;
+    if (pInternalKeys->wKeys1[KEY_INCAR_LOOKL]) wKeys |= 1;
+    wKeys <<= 1;
+    if (pInternalKeys->wKeys1[KEY_INCAR_LOOKR]) wKeys |= 1;
+    wKeys <<= 1;
+    if (pInternalKeys->wKeys1[KEY_INCAR_HANDBRAKE]) wKeys |= 1;
+    return wKeys;
+}
+void CPlayerPed_SetKeys(int iPlayerID, WORD wKeys)
+{
+    GTA_CONTROLSET* pPlayerKeys = GameGetPlayerKeys(iPlayerID);
+    memcpy(pPlayerKeys->wKeys2, pPlayerKeys->wKeys1, (sizeof(WORD) * 19));
+    pPlayerKeys->wKeys1[KEY_INCAR_HANDBRAKE] = (wKeys & 1) ? 0xFF : 0x00;
+    wKeys >>= 1; // 1
+    pPlayerKeys->wKeys1[KEY_INCAR_LOOKR] = (wKeys & 1) ? 0xFF : 0x00;
+    wKeys >>= 1; // 2
+    pPlayerKeys->wKeys1[KEY_INCAR_LOOKL] = (wKeys & 1) ? 0xFF : 0x00;
+    wKeys >>= 1; // 3
+    pPlayerKeys->wKeys1[KEY_INCAR_TURRETUD] = (wKeys & 1) ? 0xFF80 : 0x00;
+    wKeys >>= 1; // 4
+    pPlayerKeys->wKeys1[KEY_INCAR_TURRETUD] = (wKeys & 1) ? 0x80 : 0x00;
+    wKeys >>= 1; // 5
+    pPlayerKeys->wKeys1[KEY_ONFOOT_CROUCH] = (wKeys & 0) ? 0xFF : 0x00;
+    wKeys >>= 1; // 6
+    pPlayerKeys->wKeys1[KEY_ONFOOT_FIRE] = (wKeys & 1) ? 0xFF : 0x00;
+    wKeys >>= 1; // 7
+    pPlayerKeys->wKeys1[KEY_ONFOOT_SPRINT] = (wKeys & 1) ? 0xFF : 0x00;
+    wKeys >>= 1; // 8
+    pPlayerKeys->wKeys1[KEY_ONFOOT_JUMP] = (wKeys & 1) ? 0xFF : 0x00;
+    wKeys >>= 1; // 9
+    pPlayerKeys->wKeys1[KEY_ONFOOT_RIGHT] = (wKeys & 1) ? 0xFF : 0x00;
+    wKeys >>= 1; // 10
+    pPlayerKeys->wKeys1[KEY_ONFOOT_LEFT] = (wKeys & 1) ? 0xFF : 0x00;
+    wKeys >>= 1; // 11
+    pPlayerKeys->wKeys1[KEY_ONFOOT_BACKWARD] = (wKeys & 1) ? 0xFF : 0x00;
+    wKeys >>= 1; // 12
+    pPlayerKeys->wKeys1[KEY_ONFOOT_FORWARD] = (wKeys & 1) ? 0xFF : 0x00;
+    GameStoreRemotePlayerKeys(iPlayerID, pPlayerKeys);
+}
 
 class Clients
 {
@@ -644,6 +792,8 @@ public:
 
             srand(time(NULL));
 
+            GameKeyStatesInit();
+            InstallMethodHook(0x5FA308, (DWORD)CPlayerPed_ProcessControl_Hook);
             patch::Nop(0x48C975, 5); // Disable Replays
 
             char loadsc4[9] = "mainsc1";

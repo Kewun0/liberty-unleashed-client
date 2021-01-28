@@ -35,18 +35,202 @@ int64 last_sync_packet = 0;
  
 bool IsConnectedToServer = false;
 
+BYTE byteCurPlayer = 0;
+DWORD dwStackFrame = 0;
+DWORD dwCurPlayerActor = 0;
 
 using namespace plugin;
 
 int init = 0;
+int CLIENT_ID = -1;
 
 FILE* file;
+
+#define _pad(x,y) BYTE x[y]
+#define ADDR_KEYSTATES 0x6F0360
+
+typedef struct _GTA_CONTROLSET
+{
+    DWORD dwFrontPad;
+    WORD wKeys1[19];
+    DWORD dwFrontPad2;
+    WORD wKeys2[19];
+    _pad(__pad0, 0xC0);
+} GTA_CONTROLSET;
+
+typedef struct _CAMERA_AIM
+{
+    CVector LookFront;
+    CVector Source;
+    CVector SourceBeforeLookBehind;
+    CVector LookUp;
+
+} CAMERA_AIM;
+
+CAMERA_AIM remotePlayerLookFrontX[50];
+CAMERA_AIM		localPlayerLookFrontX;
+
+
+typedef struct _MATRIX4X4 {
+    CVector vLookRight;
+    float  pad_r;
+    CVector vLookUp;
+    float  pad_u;
+    CVector vLookAt;
+    float  pad_a;
+    CVector vPos;
+    float  pad_p;
+} MATRIX4X4, * PMATRIX4X4;
+
+typedef struct _CAMERA_TYPE
+{
+    _pad(__pad0, 0x190); // 000-190
+    BYTE byteDriveByLeft; // 190-191
+    BYTE byteDriveByRight; // 191-192
+    _pad(__pad1, 0x15E); // 192-2F0
+    CAMERA_AIM aim;      // 2F0-320
+    _pad(__pad2, 0x41C); // 320-73C
+    CVector vecPosition;  // 73C-748
+    CVector vecRotation;  // 748-754
+    _pad(__pad3, 0x114); // 754-868
+    BYTE byteInFreeMode; // 868-869
+    _pad(__pad4, 0xEF);  // 869-958
+} CAMERA_TYPE;
+
+GTA_CONTROLSET* pGcsInternalKeys = (GTA_CONTROLSET*)ADDR_KEYSTATES;
+
+struct
+{
+    GTA_CONTROLSET gcsControlState;
+    BYTE byteDriveByLeft;
+    BYTE byteDriveByRight;
+} SavedKeys;
+
+
+CAMERA_AIM caLocalPlayerAim;
+CAMERA_AIM caRemotePlayerAim[50];
+GTA_CONTROLSET gcsRemotePlayerKeys[50];
+
+CPed* FindLocalPlayer() { return CWorld::Players[0].m_pPed; }
+
+int iPlayerNumber = 1;
+
+class CPlayer
+{
+public:
+
+    int m_playerID = 0;
+    int m_playerPedID = -1;
+    int m_CurrentAction = 0;
+    int m_PrevAction = 0;
+
+    time_t m_LastSyncTime = 0;
+
+    bool m_bInVehicle = false;
+
+    int m_VehicleID = -1;
+
+    CVehicle* m_pVehicle;
+
+    float m_fHealth = 0;
+    float m_fArmour = 0;
+    std::string m_playerName;
+
+    SHORT m_Keys;
+
+    CPlayerPed* m_pPed = nullptr;
+
+    CPlayer(int ID)
+    {
+        m_playerID = ID;
+    }
+
+    ~CPlayer()
+    {
+        if (m_pPed) CWorld::Remove(m_pPed);
+        m_playerID = -1;
+        m_pPed = nullptr;
+        m_playerName = "";
+    }
+
+    void CreatePlayer(float x, float y, float z)
+    {
+        iPlayerNumber++;
+        CPlayerPed::SetupPlayerPed(iPlayerNumber);
+        auto ped = CWorld::Players[iPlayerNumber].m_pPed;
+        if (ped)
+        {
+            ped->m_nFlags.bBulletProof = true;
+            ped->m_nFlags.bCollisionProof = true;
+            ped->m_nFlags.bFireProof = true;
+            ped->m_nFlags.bExplosionProof = true;
+            ped->m_nFlags.bMeleeProof = true;
+            ped->m_nPedStatus = 2;
+            ped->Teleport(FindPlayerPed()->GetPosition());
+        }
+        m_playerPedID = iPlayerNumber;
+        m_pPed = ped;
+    }
+};
+CPlayer* Players[128];
+
 
 void SendPacket(ENetPeer* peer, const char* data)
 {
     ENetPacket* packet = enet_packet_create(data, strlen(data) + 1, ENET_PACKET_FLAG_RELIABLE);
     enet_peer_send(peer, 0, packet);
 }
+
+void GameKeyStatesInit()
+{
+
+    memset(&SavedKeys, 0, sizeof(SavedKeys));
+    memset(&gcsRemotePlayerKeys, 0, sizeof(gcsRemotePlayerKeys));
+}
+
+void GameStoreLocalPlayerKeys()
+{
+    memcpy(&SavedKeys.gcsControlState, pGcsInternalKeys, sizeof(GTA_CONTROLSET));
+}
+void GameSetLocalPlayerKeys()
+{
+    memcpy(pGcsInternalKeys, &SavedKeys.gcsControlState, sizeof(GTA_CONTROLSET));
+}
+
+void GameStoreRemotePlayerKeys(int iPlayer, GTA_CONTROLSET* pGcsKeyStates)
+{
+    memcpy(&gcsRemotePlayerKeys[iPlayer], pGcsKeyStates, sizeof(GTA_CONTROLSET));
+}
+void GameSetRemotePlayerKeys(int iPlayer)
+{
+    memcpy(pGcsInternalKeys, &gcsRemotePlayerKeys[iPlayer], sizeof(GTA_CONTROLSET));
+}
+GTA_CONTROLSET* GameGetInternalKeys()
+{
+
+    return pGcsInternalKeys;
+}
+
+GTA_CONTROLSET* GameGetLocalPlayerKeys()
+{
+    return &SavedKeys.gcsControlState;
+}
+
+GTA_CONTROLSET* GameGetPlayerKeys(int iPlayer)
+{
+    return &gcsRemotePlayerKeys[iPlayer];
+}
+
+void GameResetPlayerKeys(int iPlayer)
+{
+    memset(&gcsRemotePlayerKeys[iPlayer], 0, sizeof(GTA_CONTROLSET));
+}
+
+void GameResetLocalKeys()
+{
+    memset(pGcsInternalKeys, 0, sizeof(GTA_CONTROLSET));
+}
+
 
 class Clients
 {
@@ -106,35 +290,23 @@ void Timer::setInterval(Function function, int interval) {
     t.detach();
 }
 
-
-int CLIENT_ID = -1;
 void ParseData(char* data)
 {
-    // Will store the data type (e.g. 1, 2, etc)
     int data_type;
-
-    // Will store the id of the client that is sending the data
     int id;
-
-    // Get first two numbers from the data (data_type and id) and but them in their respective variables
     sscanf(data, "%d|%d", &data_type, &id);
-
-    // Switch between the different data_types
     switch (data_type)
     {
-    case 1: // data is a message
+    case 1: 
         if (id != CLIENT_ID)
         {
-            // Get message and Post it using the ClientData at id's username and the parsed msg.
             char msg[80];
             sscanf(data, "%*d|%*d|%[^|]", &msg);
-           // chatScreen.PostMessage(client_map[id]->GetUsername().c_str(), msg);
         }
         break;
-    case 2: // data is a username
+    case 2: 
         if (id != CLIENT_ID)
         {
-            // Create a new ClientData with username and add it to map at id.
             char username[80];
             sscanf(data, "%*d|%*d|%[^|]", &username);
 
@@ -142,8 +314,8 @@ void ParseData(char* data)
             client_map[id]->SetUsername(username);
         }
         break;
-    case 3: // data is our ID.
-        CLIENT_ID = id; // Set our id to the received id.
+    case 3: 
+        CLIENT_ID = id;
         break;
     }
 }
@@ -285,6 +457,7 @@ void SetStringFromCommandLine(char* szCmdLine, char* szString)
 }
 
 
+
 void InitSettings()
 {
     char* szCmdLine = GetCommandLine();
@@ -321,6 +494,11 @@ class LU_CLIENT
 public:
     LU_CLIENT()
     {
+        for (int i = 0; i <= 127; i++)
+        {
+            Players[i] = new CPlayer(i);
+        }
+
         AllocConsole();
         freopen("CONOUT$", "w", stdout);
 

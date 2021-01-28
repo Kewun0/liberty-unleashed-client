@@ -294,23 +294,21 @@ void InitSettings()
         if (*szCmdLine == '-' || *szCmdLine == '/')
         {
             szCmdLine++;
-            switch (*szCmdLine)
+            if (*szCmdLine=='h')
             {
-            case 'h':
-            case 'H':
                 szCmdLine++;
                 SetStringFromCommandLine(szCmdLine, ip);
-                break;
-            case 'p':
-            case 'P':
+            }
+            if (*szCmdLine == 'p')
+            {
                 szCmdLine++;
                 SetStringFromCommandLine(szCmdLine, port);
-                break;
-            case 'n':
-            case 'N':
+            }
+            if (*szCmdLine == 'n')
+            {
                 szCmdLine++;
                 SetStringFromCommandLine(szCmdLine, nickname);
-                break;
+                printf("%s", nickname);
             }
         }
         szCmdLine++;
@@ -323,12 +321,10 @@ class LU_CLIENT
 public:
     LU_CLIENT()
     {
-        InitSettings();
-
         AllocConsole();
         freopen("CONOUT$", "w", stdout);
 
-        sprintf(nickname, "Kewun");
+        InitSettings();
 
         patch::SetInt(0x582A8B, 208145899); // Skip Movies
         patch::Nop(0x582C26, 5); // Skip Movies

@@ -355,7 +355,7 @@ void ErasePEHeader(HINSTANCE hModule)
 
 void SendPacket(ENetPeer* peer, const char* data)
 {
-    ENetPacket* packet = enet_packet_create(data, strlen(data) + 1, ENET_PACKET_FLAG_RELIABLE);
+    ENetPacket* packet = enet_packet_create(data, strlen(data) + 1, ENET_PACKET_FLAG_UNSEQUENCED);
     enet_peer_send(peer, 0, packet);
 }
 
@@ -602,10 +602,10 @@ DWORD WINAPI SyncThread(HMODULE hModule)
             {
                 if (FindPlayerPed()->m_fHealth != 0)
                 {
-                    char sync_packet[6];
-                    sprintf(sync_packet, "8|%i", (int)FindPlayerPed()->m_fHealth);
+                    char sync_packet[80];
+                    sprintf(sync_packet, "8| %i %f %f %f",(int)FindPlayerPed()->m_fHealth, FindPlayerPed()->GetPosition().x, FindPlayerPed()->GetPosition().y, FindPlayerPed()->GetPosition().z);
                     SendPacket(peer, sync_packet);
-                    Sleep(400);
+                    Sleep(10);
                 }
             }
         }
@@ -674,7 +674,7 @@ DWORD WINAPI LUThread(HMODULE hModule)
         IsConnectedToServer = false;
     }
 
-    while (enet_host_service(client, &event, 5000) > 0)
+    while (enet_host_service(client, &event, 2000) > 0)
     {
         switch (event.type)
         {
@@ -692,7 +692,7 @@ DWORD WINAPI LUThread(HMODULE hModule)
 
     while (1 != 2)
     {
-        Sleep(1);
+       
     }
     return 0;
 }
@@ -741,7 +741,7 @@ void SetStringFromCommandLine(char* szCmdLine, char* szString)
     *szString = '\0';
 }
 
-
+int debug = 0;
 
 void InitSettings()
 {
@@ -768,6 +768,11 @@ void InitSettings()
                 SetStringFromCommandLine(szCmdLine, nickname);
                 printf("%s", nickname);
             }
+            if (*szCmdLine == 'd')
+            {
+                szCmdLine++;
+                debug = 1;
+            }
         }
         szCmdLine++;
     }
@@ -788,10 +793,13 @@ public:
             Players[i] = new CPlayer(i);
         }
 
-        AllocConsole();
-        freopen("CONOUT$", "w", stdout);
-
         InitSettings();
+
+        if (debug == 1)
+        {
+            AllocConsole();
+            freopen("CONOUT$", "w", stdout);
+        }
 
         patch::SetInt(0x582A8B, 208145899); // Skip Movies
         patch::Nop(0x582C26, 5); // Skip Movies

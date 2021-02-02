@@ -997,16 +997,13 @@ DWORD WINAPI LUThread(HMODULE hModule)
         ExitProcess(1);
     }
 
-
-    CHud::SetHelpMessage(stws(Format(" Connecting to %s:%s...", ip, port)), false);
-
     printf("Welcome to Liberty Unleashed 0.1\n");
-    printf("Connecting to server %s:%s...\n",ip,port);
+
+    p_ChatBox.AddLog("Connecting to server %s:%s...",ip,port);
 
     if (enet_host_service(client, &event, 5000) > 0 && event.type == ENET_EVENT_TYPE_CONNECT)
     {
-        printf("Connection Successful. Loading server info...\n");
-        CHud::SetHelpMessage(stws(Format(" Connection successful. Loading game", ip, port)), false);
+        p_ChatBox.AddLog("Connection Successful. Loading game...");
         IsConnectedToServer = true;
         char str_data[80] = "2|";
         strcat(str_data, nickname);
@@ -1014,8 +1011,8 @@ DWORD WINAPI LUThread(HMODULE hModule)
     }
     else
     {
-        CHud::SetHelpMessage(stws(Format(" You failed to connect to the server", ip, port)), false);
-        printf("You failed to connect to the server. \n");
+        
+        p_ChatBox.AddLog("You failed to connect to the server.");
         enet_peer_reset(peer);
         IsConnectedToServer = false;
     }
@@ -1401,10 +1398,7 @@ void RenderChatbox()
 
         if (mouse == 1)
         {
-            POINT p;
-            GetCursorPos(&p);
 
-            mySprite.Draw(p.x, p.y, 64, 64, CRGBA(255, 255, 255, 255));
             io.MouseDrawCursor = true;
         }
         else { io.MouseDrawCursor = false; }
@@ -1442,7 +1436,7 @@ public:
         patch::Nop(0x4CB597, 5); // Disable Train entry 2
         patch::Nop(0x48C8FF, 5); // Disable Trains
         patch::Nop(0x4888A5, 5); // Disable Pause 1
-        patch::Nop(0x485168, 5);
+        patch::Nop(0x485168, 5); // Disable Pause 2
 
 
         if (debug == 1)
@@ -1539,7 +1533,7 @@ public:
             }
             else
             {
-                CHud::SetHelpMessage(stws(" CRC32 Check failed on lu.scm \n Disconnecting"), false);
+                p_ChatBox.AddLog("CRC32 CHECK: Failed on lu.scm");
             }
         };
     }

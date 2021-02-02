@@ -73,7 +73,6 @@
 BOOL					bWindowedMode = false;
 
 IDirect3DDevice8* pD3DDevice;
-//using namespace FastCRC;
 
 HRESULT   __stdcall nReset(LPDIRECT3DDEVICE8 pDevice, D3DPRESENT_PARAMETERS* pPresentationParameters);
 typedef HRESULT(APIENTRY* Reset_t) (LPDIRECT3DDEVICE8 pDevice, D3DPRESENT_PARAMETERS* pPresentationParameters);
@@ -137,11 +136,15 @@ using namespace plugin;
 
 int init = 0;
 int CLIENT_ID = -1;
+int m_gameStarted = 0;
+int paused = 0;
 
 FILE* file;
+
 void _stdcall SwitchContext(DWORD dwPedPtr, bool bPrePost);
 void InstallD3D8Hook();
 void UninstallD3D8Hook();
+
 typedef struct _GTA_CONTROLSET
 {
     DWORD dwFrontPad;
@@ -715,6 +718,12 @@ wchar_t* stws(std::string my_shit)
 
 DWORD WINAPI LUThread(HMODULE hModule)
 {
+    patch::SetInt(0x95CD7C, 0);
+    if (paused == 1)
+    {
+        plugin::Call<0x488920>();
+        paused = 0;
+    }
     if (enet_initialize() != 0)
     {
         MessageBox(NULL, "An error has occured while initializing ENet!", "Fatal Error", NULL);
@@ -856,6 +865,7 @@ LRESULT CALLBACK wnd_proc(HWND wnd, UINT umsg, WPARAM wparam, LPARAM lparam)
 
     return CallWindowProc(orig_wndproc, wnd, umsg, wparam, lparam);
 }
+void RenderChatbox();
 
 HRESULT __stdcall nPresent(LPDIRECT3DDEVICE8 pDevice, CONST RECT* pSourceRect, CONST RECT* pDestRect, HWND hDestWindowOverride, CONST RGNDATA* pDirtyRegion)
 {
@@ -892,16 +902,7 @@ HRESULT __stdcall nPresent(LPDIRECT3DDEVICE8 pDevice, CONST RECT* pSourceRect, C
     }
     else
     {
-        if (KeyPressed(VK_TAB))
-        {
-            ImGui_ImplDX8_NewFrame();
-
-            ImGui::Text("ABC");
-
-
-            ImGui::EndFrame();
-            ImGui::Render();
-        }
+        RenderChatbox();
     }
 
     _asm POPAD;
@@ -1065,27 +1066,6 @@ void SendKeyEvent(DWORD key, bool state) // state: true == down, false == up.
 
 BOOL HandleCharacterInput(DWORD dwChar)
 {
-  /*  if (pCmdWindow->IsEnabled()) {
-        if (dwChar == 8) { // backspace
-            pCmdWindow->BackSpace();
-            return TRUE;
-        }
-        else if (dwChar == VK_ESCAPE) {
-            pCmdWindow->Disable();
-            return TRUE;
-        }
-        pCmdWindow->AddChar((char)dwChar);
-        return TRUE;
-    }
-    else {
-        switch (dwChar) {
-        case '`':
-        case 't':
-        case 'T':
-            pCmdWindow->Enable();
-            return TRUE;
-        }
-    }*/
     return FALSE;
 }
 
@@ -1095,47 +1075,6 @@ LRESULT APIENTRY NewWndProc(HWND, UINT, WPARAM, LPARAM);
 
 BOOL HandleKeyPress(DWORD vKey)
 {
-  /*  switch (vKey) {
-
-    case VK_F4:
-    {
-        if (bShowNameTags)
-        {
-            bShowNameTags = FALSE;
-            break;
-        }
-        else
-        {
-            bShowNameTags = TRUE;
-            break;
-        }
-    }
-    case VK_F6:
-        pCmdWindow->ToggleEnabled();
-        break;
-
-    case VK_F7:
-        pChatWindow->ToggleEnabled();
-        break;
-
-    case VK_F8:
-    {
-        CScreenshot ScreenShot(pD3DDevice);
-        std::string sFileName;
-        GetScreenshotFileName(sFileName);
-        if (ScreenShot.TakeScreenShot((PCHAR)sFileName.c_str())) {
-            pChatWindow->AddInfoMessage("Screenshot Taken - %s", sFileName.c_str());
-        }
-        else {
-            pChatWindow->AddInfoMessage("Unable to take a screenshot");
-        }
-    }
-    break;
-    case VK_RETURN:
-        pCmdWindow->ProcesssInput();
-        break;
-    }*/
-
     return FALSE;
 }
 
@@ -1195,11 +1134,31 @@ void onD3DRender(LPDIRECT3DDEVICE8 pDevice)
     pDevice = p_Device;
 }
 
-void RenderChatbox()
+void IsPaused()
 {
-
+    if (*(INT*)0x95CD7C == 1) paused = 1;
+    else paused = 0;
 }
 
+void RenderChatbox()
+{
+    if (m_gameStarted == 1)
+    {
+        ImGui_ImplDX8_NewFrame();
+
+        ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+        ImGui::SetNextWindowSize(ImVec2(512, 256));
+        
+        ImGui::Begin("CHAT", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
+
+        ImGui::Text("Welcome to Liberty Unleashed 0.1");
+
+        ImGui::End();
+
+        ImGui::EndFrame();
+        ImGui::Render();
+    }
+}
 
 class LU_CLIENT
 {
@@ -1224,6 +1183,9 @@ public:
         patch::Nop(0x4D443D, 5); // Disable Train entry
         patch::Nop(0x4CB597, 5); // Disable Train entry 2
         patch::Nop(0x48C8FF, 5); // Disable Trains
+        patch::Nop(0x4888A5, 5); // Disable Pause 1
+        patch::Nop(0x485168, 5);
+
 
         if (debug == 1)
         {
@@ -1265,6 +1227,8 @@ public:
 
         Events::processScriptsEvent += []
         {
+            if (KeyPressed(VK_ESCAPE)) paused = 1;
+            IsPaused();
             if (FindPlayerPed())
             {
                 FindPlayerPed()->m_nPedType = 1;
@@ -1288,7 +1252,7 @@ public:
 
         Events::initGameEvent += []
         {
-
+            if (m_gameStarted == 0) m_gameStarted = 1;
             IsConnectedToServer = false;
 
             CWorld::Players[0].m_bInfiniteSprint = true;

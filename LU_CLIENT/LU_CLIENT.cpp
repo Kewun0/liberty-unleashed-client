@@ -46,6 +46,7 @@
 #include "ePedPieceTypes.h"
 #include "CCamera.h"
 #include "CHud.h"
+#include "CTxdStore.h"
 #include "imgui/imgui.h"
 #include "imgui/directx8/imgui_impl_dx8.h"
 #include "imgui/directx8/imgui_impl_win32.h"
@@ -138,6 +139,7 @@ int init = 0;
 int CLIENT_ID = -1;
 int m_gameStarted = 0;
 int paused = 0;
+int mouse = 0;
 
 FILE* file;
 
@@ -321,6 +323,250 @@ void windowThread()
 
     tWindow = FindWindow(NULL, "GTA3");
 }
+
+struct ChatBox
+{
+    char                  InputBuf[256];
+    ImVector<char*>       Items;
+    ImVector<const char*> Commands;
+    ImVector<char*>       History;
+    int                   HistoryPos;  
+    ImGuiTextFilter       Filter;
+    bool                  AutoScroll;
+    bool                  ScrollToBottom;
+
+    ChatBox()
+    {
+        ClearLog();
+        memset(InputBuf, 0, sizeof(InputBuf));
+        HistoryPos = -1;
+
+        Commands.push_back("HELP");
+        Commands.push_back("HISTORY");
+        Commands.push_back("CLEAR");
+        Commands.push_back("CLASSIFY");
+
+        AutoScroll = true;
+        ScrollToBottom = false;
+        AddLog("Welcome to Liberty Unleashed 0.1");
+    }
+    ~ChatBox()
+    {
+        ClearLog();
+        for (int i = 0; i < History.Size; i++)
+            free(History[i]);
+    }
+
+    static int   Stricmp(const char* s1, const char* s2) { int d; while ((d = toupper(*s2) - toupper(*s1)) == 0 && *s1) { s1++; s2++; } return d; }
+    static int   Strnicmp(const char* s1, const char* s2, int n) { int d = 0; while (n > 0 && (d = toupper(*s2) - toupper(*s1)) == 0 && *s1) { s1++; s2++; n--; } return d; }
+    static char* Strdup(const char* s) { IM_ASSERT(s); size_t len = strlen(s) + 1; void* buf = malloc(len); IM_ASSERT(buf); return (char*)memcpy(buf, (const void*)s, len); }
+    static void  Strtrim(char* s) { char* str_end = s + strlen(s); while (str_end > s && str_end[-1] == ' ') str_end--; *str_end = 0; }
+
+    void    ClearLog()
+    {
+        for (int i = 0; i < Items.Size; i++)
+            free(Items[i]);
+        Items.clear();
+    }
+
+    void    AddLog(const char* fmt, ...) IM_FMTARGS(2)
+    {
+        char buf[1024];
+        va_list args;
+        va_start(args, fmt);
+        vsnprintf(buf, IM_ARRAYSIZE(buf), fmt, args);
+        buf[IM_ARRAYSIZE(buf) - 1] = 0;
+        va_end(args);
+        Items.push_back(Strdup(buf));
+    }
+
+    void    Draw(const char* title, bool* p_open)
+    {
+        ImGui::SetNextWindowSize(ImVec2(520, 520), ImGuiCond_FirstUseEver);
+
+        if (!ImGui::Begin(title, p_open, ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoTitleBar|ImGuiWindowFlags_NoBackground))
+        {
+            ImGui::End();
+            return;
+        }
+
+        if (ImGui::BeginPopupContextItem())
+        {
+            if (ImGui::MenuItem("Close Console"))
+                *p_open = false;
+            ImGui::EndPopup();
+        }
+
+        const float footer_height_to_reserve = ImGui::GetStyle().ItemSpacing.y + ImGui::GetFrameHeightWithSpacing();
+        ImGui::BeginChild("ScrollingRegion", ImVec2(0, -footer_height_to_reserve), false, ImGuiWindowFlags_HorizontalScrollbar);
+        if (ImGui::BeginPopupContextWindow())
+        {
+            if (ImGui::Selectable("Clear")) ClearLog();
+            ImGui::EndPopup();
+        }
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 1));
+
+        for (int i = 0; i < Items.Size; i++)
+        {
+            const char* item = Items[i];
+            if (!Filter.PassFilter(item))
+                continue;
+            ImVec4 color;
+            bool has_color = false;
+            if (strstr(item, "[error]")) { color = ImVec4(1.0f, 0.4f, 0.4f, 1.0f); has_color = true; }
+            else if (strncmp(item, "# ", 2) == 0) { color = ImVec4(1.0f, 0.8f, 0.6f, 1.0f); has_color = true; }
+            if (has_color)
+                ImGui::PushStyleColor(ImGuiCol_Text, color);
+            ImGui::TextUnformatted(item);
+            if (has_color)
+                ImGui::PopStyleColor();
+        }
+
+        if (ScrollToBottom || (AutoScroll && ImGui::GetScrollY() >= ImGui::GetScrollMaxY()))
+            ImGui::SetScrollHereY(1.0f);
+        ScrollToBottom = false;
+
+        ImGui::PopStyleVar();
+        ImGui::EndChild();
+        
+        bool reclaim_focus = false;
+        ImGuiInputTextFlags input_text_flags = ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackCompletion | ImGuiInputTextFlags_CallbackHistory;
+
+        if (mouse == 1)
+        {
+            if (ImGui::InputText("  ", InputBuf, IM_ARRAYSIZE(InputBuf), input_text_flags, &TextEditCallbackStub, (void*)this))
+            {
+                char* s = InputBuf;
+                Strtrim(s);
+                if (s[0])
+                    ExecCommand(s);
+                strcpy(s, "");
+                reclaim_focus = true;
+            }
+            ImGui::SetItemDefaultFocus();
+            ImGui::SetKeyboardFocusHere(-1);
+        }
+
+        ImGui::End();
+    }
+
+    void    ExecCommand(const char* command_line)
+    {
+        if (mouse == 1) { mouse = 0; } 
+        AddLog("# %s\n", command_line);
+        HistoryPos = -1;
+        for (int i = History.Size - 1; i >= 0; i--)
+            if (Stricmp(History[i], command_line) == 0)
+            {
+                free(History[i]);
+                History.erase(History.begin() + i);
+                break;
+            }
+        History.push_back(Strdup(command_line));
+
+        if (Stricmp(command_line, "/q") == 0 || Stricmp(command_line, "/quit") == 0)
+        {
+            IsConnectedToServer = false;
+            enet_peer_disconnect(peer, 0);
+            Sleep(1000);
+            exit(-1);
+        }
+
+        ScrollToBottom = true;
+    }
+    static int TextEditCallbackStub(ImGuiInputTextCallbackData* data)
+    {
+        ChatBox * console = (ChatBox*)data->UserData;
+        return console->TextEditCallback(data);
+    }
+
+    int TextEditCallback(ImGuiInputTextCallbackData* data)
+    {
+        switch (data->EventFlag)
+        {
+        case ImGuiInputTextFlags_CallbackCompletion:
+        {
+            const char* word_end = data->Buf + data->CursorPos;
+            const char* word_start = word_end;
+            while (word_start > data->Buf)
+            {
+                const char c = word_start[-1];
+                if (c == ' ' || c == '\t' || c == ',' || c == ';')
+                    break;
+                word_start--;
+            }
+            ImVector<const char*> candidates;
+            for (int i = 0; i < Commands.Size; i++)
+                if (Strnicmp(Commands[i], word_start, (int)(word_end - word_start)) == 0)
+                    candidates.push_back(Commands[i]);
+
+            if (candidates.Size == 0)
+            {
+                AddLog("No match for \"%.*s\"!\n", (int)(word_end - word_start), word_start);
+            }
+            else if (candidates.Size == 1)
+            {
+                data->DeleteChars((int)(word_start - data->Buf), (int)(word_end - word_start));
+                data->InsertChars(data->CursorPos, candidates[0]);
+                data->InsertChars(data->CursorPos, " ");
+            }
+            else
+            {
+                int match_len = (int)(word_end - word_start);
+                for (;;)
+                {
+                    int c = 0;
+                    bool all_candidates_matches = true;
+                    for (int i = 0; i < candidates.Size && all_candidates_matches; i++)
+                        if (i == 0)
+                            c = toupper(candidates[i][match_len]);
+                        else if (c == 0 || c != toupper(candidates[i][match_len]))
+                            all_candidates_matches = false;
+                    if (!all_candidates_matches)
+                        break;
+                    match_len++;
+                }
+
+                if (match_len > 0)
+                {
+                    data->DeleteChars((int)(word_start - data->Buf), (int)(word_end - word_start));
+                    data->InsertChars(data->CursorPos, candidates[0], candidates[0] + match_len);
+                }
+                AddLog("Possible matches:\n");
+                for (int i = 0; i < candidates.Size; i++)
+                    AddLog("- %s\n", candidates[i]);
+            }
+
+            break;
+        }
+        case ImGuiInputTextFlags_CallbackHistory:
+        {
+            const int prev_history_pos = HistoryPos;
+            if (data->EventKey == ImGuiKey_UpArrow)
+            {
+                if (HistoryPos == -1)
+                    HistoryPos = History.Size - 1;
+                else if (HistoryPos > 0)
+                    HistoryPos--;
+            }
+            else if (data->EventKey == ImGuiKey_DownArrow)
+            {
+                if (HistoryPos != -1)
+                    if (++HistoryPos >= History.Size)
+                        HistoryPos = -1;
+            }
+            if (prev_history_pos != HistoryPos)
+            {
+                const char* history_str = (HistoryPos >= 0) ? History[HistoryPos] : "";
+                data->DeleteChars(0, data->BufTextLen);
+                data->InsertChars(0, history_str);
+            }
+        }
+        }
+        return 0;
+    }
+};
+static ChatBox p_ChatBox;
 
 LRESULT __stdcall HookedWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
@@ -861,7 +1107,7 @@ LRESULT CALLBACK wnd_proc(HWND wnd, UINT umsg, WPARAM wparam, LPARAM lparam)
     case WM_KEYDOWN:
     {}
     }
-    if (ImGui_ImplWin32_WndProcHandler(wnd, umsg, wparam, lparam)) return 0;
+    if (ImGui_ImplDX8_WndProcHandler(wnd, umsg, wparam, lparam)&&mouse==1) return 0;
 
     return CallWindowProc(orig_wndproc, wnd, umsg, wparam, lparam);
 }
@@ -1140,6 +1386,8 @@ void IsPaused()
     else paused = 0;
 }
 
+CSprite2d mySprite;
+
 void RenderChatbox()
 {
     if (m_gameStarted == 1)
@@ -1148,23 +1396,33 @@ void RenderChatbox()
 
         ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
         ImGui::SetNextWindowSize(ImVec2(512, 256));
+
+        auto io = ImGui::GetIO();
+
+        if (mouse == 1)
+        {
+            POINT p;
+            GetCursorPos(&p);
+
+            mySprite.Draw(p.x, p.y, 64, 64, CRGBA(255, 255, 255, 255));
+            io.MouseDrawCursor = true;
+        }
+        else { io.MouseDrawCursor = false; }
         
-        ImGui::Begin("CHAT", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
-
-        ImGui::Text("Welcome to Liberty Unleashed 0.1");
-
-        ImGui::End();
+        p_ChatBox.Draw("Chatbox", NULL);
 
         ImGui::EndFrame();
         ImGui::Render();
     }
 }
 
+
 class LU_CLIENT
 {
 public:
     LU_CLIENT()
     {
+
         for (int i = 0; i <= 127; i++)
         {
             Players[i] = new CPlayer(i);
@@ -1195,6 +1453,21 @@ public:
 
         Events::initRwEvent += []
         {
+
+            int txd = CTxdStore::AddTxdSlot("menu");
+            CTxdStore::LoadTxd(txd, "models/menu.txd");
+            CTxdStore::AddRef(txd);
+            CTxdStore::PushCurrentTxd();
+            CTxdStore::SetCurrentTxd(txd);
+
+            char mousetxd[] = "mouse";
+            char moualp[] = "mouse_alpha";
+            mySprite.SetTexture(mousetxd,moualp);
+
+            CTxdStore::PopCurrentTxd();
+
+           
+
             srand(time(NULL));
 
             StaticHook();
@@ -1228,6 +1501,8 @@ public:
         Events::processScriptsEvent += []
         {
             if (KeyPressed(VK_ESCAPE)) paused = 1;
+            if (KeyPressed('T')) { if (mouse == 0) { mouse = 1; } }
+            
             IsPaused();
             if (FindPlayerPed())
             {
@@ -1267,8 +1542,8 @@ public:
                 CHud::SetHelpMessage(stws(" CRC32 Check failed on lu.scm \n Disconnecting"), false);
             }
         };
-        
     }
+   
 } lU_CLIENT;
 
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)

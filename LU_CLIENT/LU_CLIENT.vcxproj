@@ -15,15 +15,15 @@
     <IgnoreWarnCompileDuplicatedFilename>true</IgnoreWarnCompileDuplicatedFilename>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>LU_CLIENT</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.18362.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='GTA3 Release|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <CharacterSet>MultiByte</CharacterSet>
-    <PlatformToolset>v141_xp</PlatformToolset>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <PlatformToolset>v142</PlatformToolset>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='GTA3 zDebug|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
@@ -46,8 +46,8 @@
     <IntDir>$(ProjectDir).obj\GTA3\Release\</IntDir>
     <TargetName>lu</TargetName>
     <TargetExt>.dll</TargetExt>
-    <IncludePath>D:\Usars\Kewun\source\repos\LU_CLIENT\LU_CLIENT\includes;$(IncludePath)</IncludePath>
-    <LibraryPath>D:\Usars\Kewun\source\repos\LU_CLIENT\LU_CLIENT\libs;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);B:\DXSDK\include;D:\Usars\Kewun\source\repos\LU_CLIENT\LU_CLIENT\includes</IncludePath>
+    <LibraryPath>B:\DXSDK\lib;D:\Usars\Kewun\source\repos\LU_CLIENT\LU_CLIENT\libs;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='GTA3 zDebug|Win32'">
     <OutDir>D:\GTA III Snow\</OutDir>
@@ -58,25 +58,30 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='GTA3 Release|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
-      <Optimization>MaxSpeed</Optimization>
+      <Optimization>MinSpace</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <IntrinsicFunctions>false</IntrinsicFunctions>
       <SDLCheck>false</SDLCheck>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <AdditionalIncludeDirectories>$(PLUGIN_SDK_DIR)\plugin_iii\;$(PLUGIN_SDK_DIR)\plugin_iii\game_iii\;$(PLUGIN_SDK_DIR)\shared\;$(PLUGIN_SDK_DIR)\shared\game\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_NDEBUG;_USING_V110_SDK71_;_CRT_SECURE_NO_WARNINGS;_CRT_NON_CONFORMING_SWPRINTFS;GTA3;GTAGAME_NAME="3";GTAGAME_ABBR="3";GTAGAME_ABBRLOW="3";GTAGAME_PROTAGONISTNAME="Claude";GTAGAME_CITYNAME="Liberty City";PLUGIN_SGV_10EN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <AdditionalOptions>/Zc:threadSafeInit- %(AdditionalOptions)</AdditionalOptions>
+      <FavorSizeOrSpeed>Size</FavorSizeOrSpeed>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
     </ClCompile>
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <GenerateDebugInformation>No</GenerateDebugInformation>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
       <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
       <AdditionalLibraryDirectories>$(PLUGIN_SDK_DIR)\output\lib\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>plugin_iii.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Windows</SubSystem>
       <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
+      <IgnoreSpecificDefaultLibraries>libc.lib</IgnoreSpecificDefaultLibraries>
+      <GenerateMapFile>true</GenerateMapFile>
+      <MapExports>true</MapExports>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='GTA3 zDebug|Win32'">
@@ -99,7 +104,33 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="d3dhook\d3d8hook.cpp" />
+    <ClCompile Include="d3dhook\IDirect3D8Hook.cpp" />
+    <ClCompile Include="d3dhook\IDirect3DDevice8Hook.cpp" />
+    <ClCompile Include="d3dhook\IDirectInput8Hook.cpp" />
+    <ClCompile Include="d3dhook\IDirectInputDevice8Hook.cpp" />
+    <ClCompile Include="imgui\directx8\imgui_impl_dx8.cpp" />
+    <ClCompile Include="imgui\directx8\imgui_impl_win32.cpp" />
+    <ClCompile Include="imgui\imgui.cpp" />
+    <ClCompile Include="imgui\imgui_draw.cpp" />
+    <ClCompile Include="imgui\imgui_widgets.cpp" />
     <ClCompile Include="LU_CLIENT.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="d3dhook\d3d8hook.h" />
+    <ClInclude Include="d3dhook\IDirect3D8Hook.h" />
+    <ClInclude Include="d3dhook\IDirect3DDevice8Hook.h" />
+    <ClInclude Include="d3dhook\IDirectInput8Hook.h" />
+    <ClInclude Include="d3dhook\IDirectInputDevice8Hook.h" />
+    <ClInclude Include="imgui\directx8\imgui_impl_dx8.h" />
+    <ClInclude Include="imgui\directx8\imgui_impl_win32.h" />
+    <ClInclude Include="imgui\imconfig.h" />
+    <ClInclude Include="imgui\imgui.h" />
+    <ClInclude Include="imgui\imgui_internal.h" />
+    <ClInclude Include="imgui\imstb_rectpack.h" />
+    <ClInclude Include="imgui\imstb_textedit.h" />
+    <ClInclude Include="imgui\imstb_truetype.h" />
+    <ClInclude Include="includes\FastCRC.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

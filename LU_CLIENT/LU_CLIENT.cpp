@@ -34,6 +34,7 @@
 #define FUNC_CAutomobile__ProcessControl 0x531470
 #define _pad(x,y) BYTE x[y]
 #define ADDR_KEYSTATES 0x6F0360
+#define  _SL_STATIC
 #define NUDE void _declspec(naked) 
 
 
@@ -45,6 +46,9 @@
 #include "ePedPieceTypes.h"
 #include "CCamera.h"
 #include "CHud.h"
+#include "imgui/imgui.h"
+#include "imgui/directx8/imgui_impl_dx8.h"
+#include "imgui/directx8/imgui_impl_win32.h"
 
 #include <stdio.h>
 #include <thread>
@@ -52,16 +56,40 @@
 #include <io.h>
 #include <stdlib.h>
 #include <chrono>
-#include <map>
+#include <windowsx.h>
+#include <map> 
+#include <d3d8.h>
 
-#pragma comment(lib,"enet.lib")
 #pragma warning(disable: 4018)
 #pragma warning(disable: 4244)
 #pragma warning(disable: 4996)
 
+#pragma comment(lib,"enet.lib")
 #pragma comment(lib,"ws2_32.lib")
+#pragma comment(lib,"d3d8.lib")
 #pragma comment(lib,"winmm.lib") 
 
+
+BOOL					bWindowedMode = false;
+
+IDirect3DDevice8* pD3DDevice;
+//using namespace FastCRC;
+
+HRESULT   __stdcall nReset(LPDIRECT3DDEVICE8 pDevice, D3DPRESENT_PARAMETERS* pPresentationParameters);
+typedef HRESULT(APIENTRY* Reset_t) (LPDIRECT3DDEVICE8 pDevice, D3DPRESENT_PARAMETERS* pPresentationParameters);
+Reset_t     pReset;
+
+
+HRESULT   __stdcall  nPresent(LPDIRECT3DDEVICE8 pDevice, CONST RECT* pSourceRect, CONST RECT* pDestRect, HWND hDestWindowOverride, CONST RGNDATA* pDirtyRegion);
+typedef HRESULT(APIENTRY* Present_t)(LPDIRECT3DDEVICE8 pDevice, CONST RECT* pSourceRect, CONST RECT* pDestRect, HWND hDestWindowOverride, CONST RGNDATA* pDirtyRegion);
+Present_t   pPresent;
+
+extern LRESULT ImGui_ImplDX8_WndProcHandler(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
+LRESULT __stdcall HookedWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+
+WNDPROC OldWndProc = nullptr;
+HWND tWindow = nullptr;
 
 ENetHost* client;
 ENetAddress address; 
@@ -76,7 +104,10 @@ DWORD myPlayer = 0;
 DWORD FHCore = 0;
 DWORD dwStackFrame = 0;
 DWORD dwCurPlayerActor = 0;
+DWORD BarOldStateBlock = 0;
+DWORD BarNewStateBlock = 0;
 
+D3DMATRIX matView;
 
 int64 last_sync_packet = 0;
  
@@ -98,7 +129,9 @@ char(__thiscall* original_CPed__InflictDamage)(CPed*, CEntity*, eWeaponType, flo
 int(__thiscall* original_CPlayerPed__ProcessControl)(CPlayerPed*);
 int(__thiscall* original_CAutomobile__ProcessControl)(CAutomobile*);
 int(__thiscall* original_CWeapon__DoBulletImpact)(CWeapon* This, CEntity*, CEntity*, CVector*, CVector*, CColPoint*, CVector2D);
+ 
 
+void onD3DRender(LPDIRECT3DDEVICE8 pDevice);
 
 using namespace plugin;
 
@@ -107,6 +140,8 @@ int CLIENT_ID = -1;
 
 FILE* file;
 void _stdcall SwitchContext(DWORD dwPedPtr, bool bPrePost);
+void InstallD3D8Hook();
+void UninstallD3D8Hook();
 typedef struct _GTA_CONTROLSET
 {
     DWORD dwFrontPad;
@@ -127,7 +162,6 @@ typedef struct _CAMERA_AIM
 
 CAMERA_AIM remotePlayerLookFrontX[50];
 CAMERA_AIM		localPlayerLookFrontX;
-
 
 typedef struct _MATRIX4X4 {
     CVector vLookRight;
@@ -255,6 +289,61 @@ int __fastcall CWeapon__DoBulletImpact_Hook(CWeapon* This, DWORD _EDX, CEntity* 
     return original_CWeapon__DoBulletImpact(This, source, target, start, end, colpoint, ahead);
 }
 
+void Initialize()
+{
+    tWindow = FindWindow(0, "GTA3");
+    if (tWindow) {
+        OldWndProc = (WNDPROC)SetWindowLongPtr(tWindow, GWLP_WNDPROC, (LONG_PTR)HookedWndProc);
+    }
+
+}
+
+void Set()
+{
+    SetWindowLongPtr(tWindow, GWLP_WNDPROC, (LONG_PTR)HookedWndProc);
+}
+
+void Restore()
+{
+    SetWindowLongPtr(tWindow, GWLP_WNDPROC, (LONG_PTR)OldWndProc);
+}
+void windowThread()
+{
+    while (FindWindow(NULL, "GTA3") == 0) { //if couldnt find the window? 
+        Sleep(100);
+    }
+    while (reinterpret_cast<IDirect3DDevice8*>(RwD3D8GetCurrentD3DDevice()) == NULL) {  //if couldnt find the device.
+        Sleep(100);
+    }
+
+    tWindow = FindWindow(NULL, "GTA3");
+}
+
+LRESULT __stdcall HookedWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+
+    ImGuiIO& io = ImGui::GetIO();
+
+    io.MouseDrawCursor = false; //to view mouse
+    if (1==1)
+    {
+        //ImGUI implementation windproc
+        ImGui_ImplDX8_WndProcHandler(hWnd, uMsg, wParam, lParam);
+        //Calls and return the default window procedure.
+        return DefWindowProc(hWnd, uMsg, wParam, lParam);
+    }
+    return FALSE;
+}
+
+bool CRC32(const char* filename, char* checksumhex)
+{
+    unsigned long checksum;
+   // if (CFastCRC32::Calculate(&checksum, filename) != 0)
+     //   return false;
+   // SL_FCRC_ConvertToHex32(checksumhex, checksum, 0);
+    return true;
+}
+
 void InstallMethodHook(DWORD dwInstallAddress, DWORD dwHookFunction)
 {
     DWORD dwVP, dwVP2;
@@ -267,6 +356,8 @@ char __fastcall CPlayerPed__ProcessControl_Hook(CPlayerPed* This, DWORD _EDX)
 {
     return original_CPlayerPed__ProcessControl(This);
 }
+
+#include <detours.h>
 
 bool Hook(void* toHook, void* ourFunct, int len)
 {
@@ -562,7 +653,7 @@ void Timer::setInterval(Function function, int interval) {
     t.detach();
 }
 
-void ParseData(char* data)
+void ParseData(int plrid, char* data)
 {
     int data_type;
     int id;
@@ -680,12 +771,19 @@ DWORD WINAPI LUThread(HMODULE hModule)
         {
         case ENET_EVENT_TYPE_RECEIVE:
             last_sync_packet = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-            printf("A packet of length %u containing %s was received from %x:%u on channel %u.\n",
+
+
+           /* printf("A packet of length %u containing %s was received from %x:%u on channel %u.\n",
                 event.packet->dataLength,
                 event.packet->data,
                 event.peer->address.host,
                 event.peer->address.port,
-                event.channelID);
+                event.channelID);*/
+            char data[256];
+            sprintf(data, "%s", event.packet->data);
+            ParseData(static_cast<Clients*>(event.peer->data)->GetID(), data);
+
+            enet_packet_destroy(event.packet);
             break;
         }
     }
@@ -698,6 +796,169 @@ DWORD WINAPI LUThread(HMODULE hModule)
 }
 
 #include "CCamera.h"
+
+int has_done = 0;
+
+HRESULT __stdcall nReset(LPDIRECT3DDEVICE8 pDevice, D3DPRESENT_PARAMETERS* pPresentationParameters)
+{
+    _asm PUSHAD;
+
+    printf("Hook Reset\n");
+
+    _asm POPAD;
+
+    return pReset(pDevice, pPresentationParameters);
+}
+
+bool   wndHookInited = false;
+bool Initialized = false;
+WNDPROC			orig_wndproc;
+HWND			orig_wnd;
+extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
+LRESULT CALLBACK wnd_proc(HWND wnd, UINT umsg, WPARAM wparam, LPARAM lparam)
+{
+    switch (umsg)
+    {
+    case WM_DESTROY:
+    case WM_CLOSE:
+        ExitProcess(-1);
+        break;
+
+    case WM_MOUSEMOVE:
+        POINT ul, lr;
+        RECT rect;
+        GetClientRect(wnd, &rect);
+
+        ul.x = rect.left;
+        ul.y = rect.top;
+        lr.x = rect.right;
+        lr.y = rect.bottom;
+
+        MapWindowPoints(wnd, nullptr, &ul, 1);
+        MapWindowPoints(wnd, nullptr, &lr, 1);
+
+        rect.left = ul.x;
+        rect.top = ul.y;
+        rect.right = lr.x;
+        rect.bottom = lr.y;
+
+        if (GetActiveWindow() == FindWindow(0,"GTA3"))
+            ClipCursor(&rect);
+        break;
+    case WM_MOUSEHOVER:
+        break;
+    case WM_SYSKEYDOWN:
+    case WM_KEYDOWN:
+    {}
+    }
+    if (ImGui_ImplWin32_WndProcHandler(wnd, umsg, wparam, lparam)) return 0;
+
+    return CallWindowProc(orig_wndproc, wnd, umsg, wparam, lparam);
+}
+
+HRESULT __stdcall nPresent(LPDIRECT3DDEVICE8 pDevice, CONST RECT* pSourceRect, CONST RECT* pDestRect, HWND hDestWindowOverride, CONST RGNDATA* pDirtyRegion)
+{
+    _asm PUSHAD;
+
+
+    if (!wndHookInited)
+    {
+        printf("Initing windows hook for imgui\n");
+        ImGui::CreateContext();
+        HWND  wnd = FindWindow(0, "GTA3");
+        if (wnd)
+        {
+            printf("Window found & context created\n");
+            if (orig_wndproc == NULL || wnd != orig_wnd)
+            {
+                orig_wndproc = (WNDPROC)(UINT_PTR)SetWindowLong(wnd, GWL_WNDPROC, (LONG)(UINT_PTR)wnd_proc);
+                orig_wnd = wnd;
+                ImmAssociateContext(wnd, 0);
+            }
+            RECT rect;
+
+            printf("associated\n");
+
+            GetWindowRect(wnd, &rect);
+            wndHookInited = true;
+
+            ImGui_ImplDX8_Init(orig_wnd, pDevice);
+            printf("IMGUI HAS BEEN IMPLEMENTED\n");
+
+            Initialized = true;
+        }
+        wndHookInited = true;
+    }
+    else
+    {
+        if (KeyPressed(VK_TAB))
+        {
+            ImGui_ImplDX8_NewFrame();
+
+            ImGui::Text("ABC");
+
+
+            ImGui::EndFrame();
+            ImGui::Render();
+        }
+    }
+
+    _asm POPAD;
+
+    return  pPresent(pDevice, pSourceRect, pDestRect, hDestWindowOverride, pDirtyRegion);
+}
+
+DWORD_PTR* _FindDevice(DWORD Base, DWORD Len)
+{
+    unsigned long i = 0, n = 0;
+
+    for (i = 0; i < Len; i++)
+    {
+        if (*(BYTE*)(Base + i + 0x00) == 0xC7)n++;
+        if (*(BYTE*)(Base + i + 0x01) == 0x06)n++;
+        if (*(BYTE*)(Base + i + 0x06) == 0x89)n++;
+        if (*(BYTE*)(Base + i + 0x07) == 0x86)n++;
+        if (*(BYTE*)(Base + i + 0x0C) == 0x89)n++;
+        if (*(BYTE*)(Base + i + 0x0D) == 0x86)n++;
+        if (n == 6) return (DWORD_PTR*)(Base + i + 2); n = 0;
+    }
+    return(0);
+}
+
+int __fastcall StaticHook(void)
+{
+
+    HMODULE hD3D8Dll;
+    do
+    {
+        printf(" Loading d3d8.dll->\n");
+        hD3D8Dll = GetModuleHandle("d3d8.dll");
+        Sleep(20);
+        printf("OK!\n");
+    } while (!hD3D8Dll);
+
+    printf("Enable Device [GTA3]");
+    DWORD_PTR* VtablePtr = _FindDevice((DWORD)hD3D8Dll, 0x128000);
+    printf("OK!\n");
+
+    if (VtablePtr == NULL)
+    {
+        MessageBox(NULL, "Device Not Found !! Please try again", 0, MB_ICONSTOP);
+        ExitProcess(TRUE);
+    }
+    DWORD_PTR* VTable = 0;
+    *(DWORD_PTR*)&VTable = *(DWORD_PTR*)VtablePtr;
+    printf("OK!\n");
+    printf("%s - Hooking Class->");
+   
+    pPresent = (Present_t)DetourFunction((PBYTE)VTable[15], (LPBYTE)nPresent);
+    pReset = (Reset_t)DetourFunction((PBYTE)VTable[14], (LPBYTE)nReset);
+    printf("OK!\n");
+
+
+    return(0);
+}
 
 void CCamera_SetCamPositionForFixedMode(CVector const& vecFixedModeSource, CVector const& vecFixedModeUpOffSet) {
     plugin::CallMethod<0x46BA72, CCamera*, CVector const&, CVector const&>(&TheCamera, vecFixedModeSource, vecFixedModeUpOffSet);
@@ -783,6 +1044,163 @@ const char* my_fun(const char* par)
     return par;
 }
 
+unsigned int getfilesize(const char* path)
+{
+    struct stat ss;
+    stat(path, &ss);
+    return (unsigned int)ss.st_size;
+}
+
+bool is_dll_loaded(LPCSTR moduleName)
+{
+    return GetModuleHandle(moduleName);
+}
+void InitD3DStuff() { printf("Initd3dstuff"); }
+void TheSceneEnd() { printf("SceneEnd"); }
+
+void SendKeyEvent(DWORD key, bool state) // state: true == down, false == up.
+{
+
+}
+
+BOOL HandleCharacterInput(DWORD dwChar)
+{
+  /*  if (pCmdWindow->IsEnabled()) {
+        if (dwChar == 8) { // backspace
+            pCmdWindow->BackSpace();
+            return TRUE;
+        }
+        else if (dwChar == VK_ESCAPE) {
+            pCmdWindow->Disable();
+            return TRUE;
+        }
+        pCmdWindow->AddChar((char)dwChar);
+        return TRUE;
+    }
+    else {
+        switch (dwChar) {
+        case '`':
+        case 't':
+        case 'T':
+            pCmdWindow->Enable();
+            return TRUE;
+        }
+    }*/
+    return FALSE;
+}
+
+WNDPROC hOldProc;
+
+LRESULT APIENTRY NewWndProc(HWND, UINT, WPARAM, LPARAM);
+
+BOOL HandleKeyPress(DWORD vKey)
+{
+  /*  switch (vKey) {
+
+    case VK_F4:
+    {
+        if (bShowNameTags)
+        {
+            bShowNameTags = FALSE;
+            break;
+        }
+        else
+        {
+            bShowNameTags = TRUE;
+            break;
+        }
+    }
+    case VK_F6:
+        pCmdWindow->ToggleEnabled();
+        break;
+
+    case VK_F7:
+        pChatWindow->ToggleEnabled();
+        break;
+
+    case VK_F8:
+    {
+        CScreenshot ScreenShot(pD3DDevice);
+        std::string sFileName;
+        GetScreenshotFileName(sFileName);
+        if (ScreenShot.TakeScreenShot((PCHAR)sFileName.c_str())) {
+            pChatWindow->AddInfoMessage("Screenshot Taken - %s", sFileName.c_str());
+        }
+        else {
+            pChatWindow->AddInfoMessage("Unable to take a screenshot");
+        }
+    }
+    break;
+    case VK_RETURN:
+        pCmdWindow->ProcesssInput();
+        break;
+    }*/
+
+    return FALSE;
+}
+
+
+LRESULT APIENTRY NewWndProc(HWND hwnd, UINT uMsg,
+    WPARAM wParam, LPARAM lParam)
+{
+  //  if (pGUI) pGUI->MsgProc(hwnd, uMsg, wParam, lParam);
+    switch (uMsg) {
+    case WM_KEYUP:
+    {
+        SendKeyEvent((DWORD)wParam, false);
+        if (HandleKeyPress((DWORD)wParam)) { // 'I' handled it.
+            return 0;
+        }
+    }
+    break;
+    case WM_KEYDOWN:
+    {
+        SendKeyEvent((DWORD)wParam, true);
+    }
+    break;
+    case WM_CHAR:
+        if (HandleCharacterInput((DWORD)wParam)) { // 'I' handled it.
+            return 0;
+        }
+        break;
+    }
+    return CallWindowProc(hOldProc, hwnd, uMsg, wParam, lParam);
+}
+
+BOOL SubclassGameWindow(HWND hWnd)
+{
+    printf("Ha wu en de");
+    if (hWnd) {
+        hOldProc = SubclassWindow(hWnd, NewWndProc);
+        return TRUE;
+    }
+    printf("CRasher");
+    return FALSE;
+}
+
+bool Anticheat()
+{
+    if (getfilesize("data\\lu.scm") != 80919)
+    {
+        return false;
+    }
+    return true;
+}
+int D3DInited = 0;
+
+LPDIRECT3DDEVICE8 p_Device;
+
+void onD3DRender(LPDIRECT3DDEVICE8 pDevice)
+{
+    pDevice = p_Device;
+}
+
+void RenderChatbox()
+{
+
+}
+
+
 class LU_CLIENT
 {
 public:
@@ -794,12 +1212,6 @@ public:
         }
 
         InitSettings();
-
-        if (debug == 1)
-        {
-            AllocConsole();
-            freopen("CONOUT$", "w", stdout);
-        }
 
         patch::SetInt(0x582A8B, 208145899); // Skip Movies
         patch::Nop(0x582C26, 5); // Skip Movies
@@ -813,11 +1225,17 @@ public:
         patch::Nop(0x4CB597, 5); // Disable Train entry 2
         patch::Nop(0x48C8FF, 5); // Disable Trains
 
+        if (debug == 1)
+        {
+            AllocConsole();
+            freopen("CONOUT$", "w", stdout);
+        }
+
         Events::initRwEvent += []
         {
             srand(time(NULL));
 
-         //   Hook((void*)0x52BFB0, (void*)my_fun, 5); // fix missing text
+            StaticHook();
 
             GameKeyStatesInit();
             InstallMethodHook(0x5FA308, (DWORD)CPlayerPed_ProcessControl_Hook);
@@ -831,7 +1249,11 @@ public:
             }
 
             char missing[3] = "%s";
+            char scm[7] = "lu.scm";
+            char scm_data[15] = "data\\lu.scm";
 
+            memcpy((char*)0x5EE79C, scm, sizeof(scm)); // scm patch 
+            memcpy((char*)0x6108A0, scm_data, sizeof(scm_data)); // scm patch
             memcpy((char*)0x600200, missing, sizeof(missing)); // fix missing text
             memcpy((char*)0x5F55E0, loadsc4, sizeof(loadsc4)); // custom load scr
         };
@@ -854,15 +1276,42 @@ public:
             ProcessSync();
         };
 
+        Events::d3dLostEvent += []
+        {
+            ImGui_ImplDX8_InvalidateDeviceObjects();
+        };
+
+        Events::d3dResetEvent += []
+        {
+            ImGui_ImplDX8_InvalidateDeviceObjects();
+        };
+
         Events::initGameEvent += []
         {
+
             IsConnectedToServer = false;
 
             CWorld::Players[0].m_bInfiniteSprint = true;
 
-            CloseHandle(CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)LUThread, NULL, 0, nullptr));
-            CloseHandle(CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)SyncThread, NULL, 0, nullptr));
+            if (Anticheat())
+            {
+                CloseHandle(CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)LUThread, NULL, 0, nullptr));
+                CloseHandle(CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)SyncThread, NULL, 0, nullptr));
+            }
+            else
+            {
+                CHud::SetHelpMessage(stws(" CRC32 Check failed on lu.scm \n Disconnecting"), false);
+            }
         };
         
     }
 } lU_CLIENT;
+
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
+{
+    if (fdwReason == DLL_PROCESS_ATTACH)
+    {
+        
+    }
+    return TRUE;
+}

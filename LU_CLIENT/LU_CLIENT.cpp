@@ -880,13 +880,22 @@ void CPlayerPed_SetKeys(int iPlayerID, WORD wKeys)
 
 class Clients
 {
-private:
+public:
+
     int m_id;
+    bool m_bExists;
+    CPlayerPed* m_pPlayer;
     std::string m_username;
 
-public:
     Clients(int id) : m_id(id) {}
 
+    void CreatePlayer(float x, float y, float z)
+    {
+        if (!m_pPlayer)
+        {
+            
+        }
+    }
     void SetUsername(std::string username) { m_username = username; }
 
     int GetID() { return m_id; }
@@ -1287,6 +1296,7 @@ void LostConnection()
     IsConnectedToServer = false;
     enet_peer_disconnect(peer, 0);
     p_ChatBox.AddLog("You have lost connection to the server");
+
     
 }
 

@@ -289,6 +289,38 @@ BYTE FindPlayerNumFromPedPtr(DWORD dwPedPtr)
     return 0;
 }
 
+float ImGui_ProgressBar(const char* optionalPrefixText, float value, const float minValue, const float maxValue, const char* format, const ImVec2& sizeOfBarWithoutTextInPixels, const ImVec4& colorLeft, const ImVec4& colorRight, const ImVec4& colorBorder) {
+    if (value < minValue) value = minValue;
+    else if (value > maxValue) value = maxValue;
+    const float valueFraction = (maxValue == minValue) ? 1.0f : ((value - minValue) / (maxValue - minValue));
+    const bool needsPercConversion = strstr(format, "%%") != NULL;
+
+    ImVec2 size = sizeOfBarWithoutTextInPixels;
+    if (size.x <= 0) size.x = ImGui::GetWindowWidth() * 0.25f;
+    if (size.y <= 0) size.y = ImGui::GetTextLineHeightWithSpacing(); // or without
+
+    const ImFontAtlas* fontAtlas = ImGui::GetIO().Fonts;
+
+    if (optionalPrefixText && strlen(optionalPrefixText) > 0) {
+        ImGui::AlignFirstTextHeightToWidgets();
+        ImGui::Text(optionalPrefixText);
+        ImGui::SameLine();
+    }
+
+    if (valueFraction > 0) {
+        ImGui::Image(fontAtlas->TexID, ImVec2(size.x * valueFraction, size.y), fontAtlas->TexUvWhitePixel, fontAtlas->TexUvWhitePixel, colorLeft, colorBorder);
+    }
+    if (valueFraction < 1) {
+        if (valueFraction > 0) ImGui::SameLine(0, 0);
+        ImGui::Image(fontAtlas->TexID, ImVec2(size.x * (1.f - valueFraction), size.y), fontAtlas->TexUvWhitePixel, fontAtlas->TexUvWhitePixel, colorRight, colorBorder);
+    }
+    ImGui::SameLine();
+
+    ImGui::Text(format, needsPercConversion ? (valueFraction * 100.f + 0.0001f) : value);
+    return valueFraction;
+
+}
+
 int __fastcall CWeapon__DoBulletImpact_Hook(CWeapon* This, DWORD _EDX, CEntity* source, CEntity* target, CVector* start, CVector* end, CColPoint* colpoint, CVector2D ahead)
 {
     return original_CWeapon__DoBulletImpact(This, source, target, start, end, colpoint, ahead);
@@ -322,6 +354,12 @@ void windowThread()
     }
 
     tWindow = FindWindow(NULL, "GTA3");
+}
+
+void SendPacket(ENetPeer* peer, const char* data)
+{
+    ENetPacket* packet = enet_packet_create(data, strlen(data) + 1, ENET_PACKET_FLAG_UNSEQUENCED);
+    enet_peer_send(peer, 0, packet);
 }
 
 struct ChatBox
@@ -452,8 +490,10 @@ struct ChatBox
 
     void    ExecCommand(const char* command_line)
     {
+        SendPacket(peer, Format("9| %s",command_line).c_str());
+
         if (mouse == 1) { mouse = 0; } 
-        AddLog("# %s\n", command_line);
+        
         HistoryPos = -1;
         for (int i = History.Size - 1; i >= 0; i--)
             if (Stricmp(History[i], command_line) == 0)
@@ -693,12 +733,6 @@ void ErasePEHeader(HINSTANCE hModule)
     FlushInstructionCache(GetCurrentProcess(), (LPCVOID)mbi.BaseAddress, mbi.RegionSize);
 }
 
-void SendPacket(ENetPeer* peer, const char* data)
-{
-    ENetPacket* packet = enet_packet_create(data, strlen(data) + 1, ENET_PACKET_FLAG_UNSEQUENCED);
-    enet_peer_send(peer, 0, packet);
-}
-
 void GameKeyStatesInit()
 {
 
@@ -902,11 +936,40 @@ void Timer::setInterval(Function function, int interval) {
     t.detach();
 }
 
+void DecryptPacket(char* data, int client_id)
+{
+    std::string str(data);
+    std::string buf;
+    std::stringstream ss(str);
+
+    std::vector<std::string> tokens;
+
+    while (ss >> buf)
+    {
+        tokens.push_back(buf);
+    }
+
+    if (tokens[0] == "8|") // PACKET TYPE: PLAYER MOVEMENT SYNC
+    {
+
+    }
+    if (data[0] == '9' && data[1] == '|')
+    {
+        char* token = strtok(data, "|");
+        std::string packet;
+        while (token != NULL)
+        {
+            packet = token;
+            token = strtok(NULL, "|");
+        } p_ChatBox.AddLog("%s", packet.c_str());
+    }
+}
 void ParseData(int plrid, char* data)
 {
     int data_type;
     int id;
     sscanf(data, "%d|%d", &data_type, &id);
+    if ( data_type != 8 ) printf("Received Packet with data type %i\n", data_type);
     switch (data_type)
     {
     case 1: 
@@ -919,9 +982,10 @@ void ParseData(int plrid, char* data)
     case 2: 
         if (id != CLIENT_ID)
         {
+            
             char username[80];
             sscanf(data, "%*d|%*d|%[^|]", &username);
-
+            p_ChatBox.AddLog("%s has joined the server", username);
             client_map[id] = new Clients(id);
             client_map[id]->SetUsername(username);
         }
@@ -929,6 +993,16 @@ void ParseData(int plrid, char* data)
     case 3: 
         CLIENT_ID = id;
         break;
+    case 4:
+
+        p_ChatBox.AddLog("%s has left the sercer", client_map[id]->GetUsername().c_str());
+  
+
+        break;
+    case 9:
+        DecryptPacket(data, id);
+        break;
+    
     }
 }
 
@@ -1212,7 +1286,8 @@ void LostConnection()
 {
     IsConnectedToServer = false;
     enet_peer_disconnect(peer, 0);
-    printf("You have lost connection to the server\n");
+    p_ChatBox.AddLog("You have lost connection to the server");
+    
 }
 
 void ProcessSync()
@@ -1404,6 +1479,13 @@ void RenderChatbox()
         else { io.MouseDrawCursor = false; }
         
         p_ChatBox.Draw("Chatbox", NULL);
+
+        if (KeyPressed(VK_TAB) && GetActiveWindow() == FindWindow(0,"GTA3"))
+        {
+            ImGui::Begin("Scoreboard");
+            ImGui_ProgressBar(" ", FindPlayerPed()->m_fHealth, 0, 100, "  ",ImVec2(50,5),ImVec4(0.0f,1.0f,0.0f,1.0f), ImVec4(1.0f, 0.0f, 0.0f, 1.0f), ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
+            ImGui::End();
+        }
 
         ImGui::EndFrame();
         ImGui::Render();

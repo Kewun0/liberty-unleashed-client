@@ -1545,18 +1545,6 @@ public:
 
         Events::initRwEvent += []
         {
-            int txd = CTxdStore::AddTxdSlot("menu");
-            CTxdStore::LoadTxd(txd, "models/menu.txd");
-            CTxdStore::AddRef(txd);
-            CTxdStore::PushCurrentTxd();
-            CTxdStore::SetCurrentTxd(txd);
-
-            char mousetxd[] = "mouse";
-            char moualp[] = "mouse_alpha";
-            mySprite.SetTexture(mousetxd,moualp);
-
-            CTxdStore::PopCurrentTxd();
-
             srand(time(NULL));
 
             StaticHook();

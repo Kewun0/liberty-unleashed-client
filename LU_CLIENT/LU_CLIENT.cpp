@@ -70,6 +70,8 @@
 #pragma comment(lib,"d3d8.lib")
 #pragma comment(lib,"winmm.lib") 
 
+extern unsigned char SCMData;
+
 
 BOOL					bWindowedMode = false;
 
@@ -212,65 +214,6 @@ CPed* FindLocalPlayer() { return CWorld::Players[0].m_pPed; }
 
 int iPlayerNumber = 1;
 
-class CPlayer
-{
-public:
-
-    int m_playerID = 0;
-    int m_playerPedID = -1;
-    int m_CurrentAction = 0;
-    int m_PrevAction = 0;
-
-    time_t m_LastSyncTime = 0;
-
-    bool m_bInVehicle = false;
-
-    int m_VehicleID = -1;
-
-    CVehicle* m_pVehicle;
-
-    float m_fHealth = 0;
-    float m_fArmour = 0;
-    std::string m_playerName;
-
-    SHORT m_Keys;
-
-    CPlayerPed* m_pPed = nullptr;
-
-    CPlayer(int ID)
-    {
-        m_playerID = ID;
-    }
-
-    ~CPlayer()
-    {
-        if (m_pPed) CWorld::Remove(m_pPed);
-        m_playerID = -1;
-        m_pPed = nullptr;
-        m_playerName = "";
-    }
-
-    void CreatePlayer(float x, float y, float z)
-    {
-        iPlayerNumber++;
-        CPlayerPed::SetupPlayerPed(iPlayerNumber);
-        auto ped = CWorld::Players[iPlayerNumber].m_pPed;
-        if (ped)
-        {
-            ped->m_nFlags.bBulletProof = true;
-            ped->m_nFlags.bCollisionProof = true;
-            ped->m_nFlags.bFireProof = true;
-            ped->m_nFlags.bExplosionProof = true;
-            ped->m_nFlags.bMeleeProof = true;
-            ped->m_nPedStatus = 2;
-            ped->Teleport(FindPlayerPed()->GetPosition());
-        }
-        m_playerPedID = iPlayerNumber;
-        m_pPed = ped;
-    }
-};
-CPlayer* Players[128];
-
 BYTE FindPlayerNumFromPedPtr(DWORD dwPedPtr)
 {
     CPlayerPed* ped = (CPlayerPed*)dwPedPtr;
@@ -343,17 +286,6 @@ void Set()
 void Restore()
 {
     SetWindowLongPtr(tWindow, GWLP_WNDPROC, (LONG_PTR)OldWndProc);
-}
-void windowThread()
-{
-    while (FindWindow(NULL, "GTA3") == 0) { //if couldnt find the window? 
-        Sleep(100);
-    }
-    while (reinterpret_cast<IDirect3DDevice8*>(RwD3D8GetCurrentD3DDevice()) == NULL) {  //if couldnt find the device.
-        Sleep(100);
-    }
-
-    tWindow = FindWindow(NULL, "GTA3");
 }
 
 void SendPacket(ENetPeer* peer, const char* data)
@@ -886,6 +818,13 @@ public:
     bool m_bExists;
     CPlayerPed* m_pPlayer;
     std::string m_username;
+    int m_playerPedID = -1;
+    int m_CurrentAction = 0;
+    int m_PrevAction = 0;
+    float m_fHealth = 0;
+    float m_fArmour = 0;
+
+    SHORT m_Keys;
 
     Clients(int id) : m_id(id) {}
 
@@ -893,7 +832,20 @@ public:
     {
         if (!m_pPlayer)
         {
-            
+            iPlayerNumber++;
+            CPlayerPed::SetupPlayerPed(iPlayerNumber);
+            auto ped = CWorld::Players[iPlayerNumber].m_pPed;
+            if (ped)
+            {
+                ped->m_nFlags.bBulletProof = true;
+                ped->m_nFlags.bCollisionProof = true;
+                ped->m_nFlags.bFireProof = true;
+                ped->m_nFlags.bExplosionProof = true;
+                ped->m_nFlags.bMeleeProof = true;
+                ped->m_nPedStatus = 2;
+            }
+            m_playerPedID = iPlayerNumber;
+            m_pPlayer = ped;
         }
     }
     void SetUsername(std::string username) { m_username = username; }
@@ -1306,7 +1258,7 @@ void ProcessSync()
     
     int64 test = last_sync_packet - now;
 
-    if (test <= -10000)
+    if (test <= -15000)
     {
         if (IsConnectedToServer)
         {
@@ -1370,6 +1322,7 @@ void InitSettings()
 
 const char* my_fun(const char* par)
 {
+    
     return par;
 }
 
@@ -1502,16 +1455,32 @@ void RenderChatbox()
     }
 }
 
+void CreatePlaya()
+{
+    int player;
+    Command<0x053>(0, 811.875, -939.93, 35.75, &player);
+}
+
+DWORD jmpAddy = 0x48C339;
+
+__declspec(naked) void CreatePlayer()
+{
+    __asm
+    {
+        call CreatePlaya
+        jmp jmpAddy
+    }
+}
+
 
 class LU_CLIENT
 {
 public:
     LU_CLIENT()
     {
-
-        for (int i = 0; i <= 127; i++)
+        for (int i = 0; i <= 128; i++)
         {
-            Players[i] = new CPlayer(i);
+            client_map[i] = new Clients(i);
         }
 
         InitSettings();
@@ -1529,7 +1498,10 @@ public:
         patch::Nop(0x48C8FF, 5); // Disable Trains
         patch::Nop(0x4888A5, 5); // Disable Pause 1
         patch::Nop(0x485168, 5); // Disable Pause 2
+        patch::Nop(0x48C26B, 5); // Don't init scripts
+        patch::Nop(0x48C32F, 5); // Don't process
 
+        Hook((void*)0x48C334, CreatePlayer, 5);
 
         if (debug == 1)
         {
@@ -1570,16 +1542,13 @@ public:
             }
 
             char missing[3] = "%s";
-            char scm[7] = "lu.scm";
-            char scm_data[15] = "data\\lu.scm";
 
-            memcpy((char*)0x5EE79C, scm, sizeof(scm)); // scm patch 
-            memcpy((char*)0x6108A0, scm_data, sizeof(scm_data)); // scm patch
             memcpy((char*)0x600200, missing, sizeof(missing)); // fix missing text
             memcpy((char*)0x5F55E0, loadsc4, sizeof(loadsc4)); // custom load scr
         };
 
         Events::menuDrawingEvent += [] { if (init == 0) {
+
             plugin::Call<0x48AB40>(); init = 1; patch::Nop(0x4872B0, 5); patch::Nop(0x487998
                 , 5);
         }};
@@ -1613,6 +1582,7 @@ public:
 
         Events::initGameEvent += []
         {
+
             if (m_gameStarted == 0) m_gameStarted = 1;
             IsConnectedToServer = false;
 

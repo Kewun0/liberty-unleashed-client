@@ -250,6 +250,19 @@ BYTE FindPlayerNumFromPedPtr(DWORD dwPedPtr)
     return 0;
 }
 
+std::string insert_newlines(const std::string& in, const size_t every_n)
+{
+    std::string out;
+    out.reserve(in.size() + in.size() / every_n);
+    for (std::string::size_type i = 0; i < in.size(); i++) {
+        if (!(i % every_n) && i) {
+            out.push_back('\n');
+        }
+        out.push_back(in[i]);
+    }
+    return out;
+}
+
 float ImGui_ProgressBar(const char* optionalPrefixText, float value, const float minValue, const float maxValue, const char* format, const ImVec2& sizeOfBarWithoutTextInPixels, const ImVec4& colorLeft, const ImVec4& colorRight, const ImVec4& colorBorder) {
     if (value < minValue) value = minValue;
     else if (value > maxValue) value = maxValue;
@@ -290,7 +303,7 @@ void SendPacket(ENetPeer* peer, const char* data)
 
 struct ChatBox
 {
-    char                  InputBuf[256];
+    char                  InputBuf[128];
     ImVector<char*>       Items;
     ImVector<const char*> Commands;
     ImVector<char*>       History;
@@ -342,13 +355,17 @@ struct ChatBox
         buf[IM_ARRAYSIZE(buf) - 1] = 0;
         va_end(args);
         Items.push_back(Strdup(buf));
+        if (Items.Size >= 35)
+        {
+            Items.erase(Items.begin());
+        }
     }
 
     void    Draw(const char* title, bool* p_open)
     {
-        ImGui::SetNextWindowSize(ImVec2(520, 520), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(520, 500), ImGuiCond_FirstUseEver);
 
-        if (!ImGui::Begin(title, p_open, ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoTitleBar|ImGuiWindowFlags_NoBackground))
+        if (!ImGui::Begin(title, p_open, ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoTitleBar|ImGuiWindowFlags_NoBackground|ImGuiWindowFlags_NoScrollbar))
         {
             ImGui::End();
             return;
@@ -450,61 +467,6 @@ struct ChatBox
     {
         switch (data->EventFlag)
         {
-        case ImGuiInputTextFlags_CallbackCompletion:
-        {
-            const char* word_end = data->Buf + data->CursorPos;
-            const char* word_start = word_end;
-            while (word_start > data->Buf)
-            {
-                const char c = word_start[-1];
-                if (c == ' ' || c == '\t' || c == ',' || c == ';')
-                    break;
-                word_start--;
-            }
-            ImVector<const char*> candidates;
-            for (int i = 0; i < Commands.Size; i++)
-                if (Strnicmp(Commands[i], word_start, (int)(word_end - word_start)) == 0)
-                    candidates.push_back(Commands[i]);
-
-            if (candidates.Size == 0)
-            {
-                AddLog("No match for \"%.*s\"!\n", (int)(word_end - word_start), word_start);
-            }
-            else if (candidates.Size == 1)
-            {
-                data->DeleteChars((int)(word_start - data->Buf), (int)(word_end - word_start));
-                data->InsertChars(data->CursorPos, candidates[0]);
-                data->InsertChars(data->CursorPos, " ");
-            }
-            else
-            {
-                int match_len = (int)(word_end - word_start);
-                for (;;)
-                {
-                    int c = 0;
-                    bool all_candidates_matches = true;
-                    for (int i = 0; i < candidates.Size && all_candidates_matches; i++)
-                        if (i == 0)
-                            c = toupper(candidates[i][match_len]);
-                        else if (c == 0 || c != toupper(candidates[i][match_len]))
-                            all_candidates_matches = false;
-                    if (!all_candidates_matches)
-                        break;
-                    match_len++;
-                }
-
-                if (match_len > 0)
-                {
-                    data->DeleteChars((int)(word_start - data->Buf), (int)(word_end - word_start));
-                    data->InsertChars(data->CursorPos, candidates[0], candidates[0] + match_len);
-                }
-                AddLog("Possible matches:\n");
-                for (int i = 0; i < candidates.Size; i++)
-                    AddLog("- %s\n", candidates[i]);
-            }
-
-            break;
-        }
         case ImGuiInputTextFlags_CallbackHistory:
         {
             const int prev_history_pos = HistoryPos;
@@ -575,21 +537,6 @@ bool Hook(void* toHook, void* ourFunct, int len)
     return true;
 }
 
-void CRender_DrawProgressBar(CRect size, int value, CRGBA color, float max)
-{
-    CRGBA darkbg = color;
-    if (color.r < 65)darkbg.r = 0;
-    else darkbg.r = color.r - 65;
-    if (color.g < 65)darkbg.g = 0;
-    else darkbg.g = color.g - 65;
-    if (color.b < 65)darkbg.b = 0;
-    else darkbg.b = color.b - 65;
-    CSprite2d::DrawRect(CRect(size.left, size.top, size.right, size.bottom), CRGBA(0, 0, 0, 255));
-    CSprite2d::DrawRect(CRect(size.left + 1, size.top + 1, size.right - 1, size.bottom - 1), darkbg);
-    int len = (size.right - size.left);
-    CSprite2d::DrawRect(CRect(size.left + 1, size.top + 1, size.left + ceil((len / max) * value) - 1, size.bottom - 1), color);
-}
-
 CPed* FindPlayerPed_Hook(void)
 {
     return CWorld::Players[CWorld::PlayerInFocus].m_pPed;
@@ -632,16 +579,6 @@ void InstallHook(DWORD dwInstallAddress, DWORD dwHookFunction, DWORD dwHookStora
     VirtualProtect((PVOID)dwInstallAddress, iJmpCodeSize, PAGE_EXECUTE_READWRITE, &dwVP);
     memcpy((PVOID)dwInstallAddress, pbyteJmpCode, iJmpCodeSize);
     VirtualProtect((PVOID)dwInstallAddress, iJmpCodeSize, dwVP, &dwVP2);
-}
-
-void ErasePEHeader(HINSTANCE hModule)
-{
-    MEMORY_BASIC_INFORMATION mbi;
-    VirtualQuery((LPCVOID)hModule, &mbi, sizeof(mbi));
-    VirtualProtect(mbi.BaseAddress, mbi.RegionSize, PAGE_EXECUTE_READWRITE, &mbi.Protect);
-    ZeroMemory((PVOID)hModule, 4096);
-    VirtualProtect(mbi.BaseAddress, mbi.RegionSize, mbi.Protect, NULL);
-    FlushInstructionCache(GetCurrentProcess(), (LPCVOID)mbi.BaseAddress, mbi.RegionSize);
 }
 
 void GameKeyStatesInit()
@@ -901,7 +838,10 @@ void DecryptPacket(char* data, int client_id)
         {
             packet = token;
             token = strtok(NULL, "|");
-        } p_ChatBox.AddLog("%s", packet.c_str());
+        } 
+        std::string msg = insert_newlines(packet, 64);
+        msg.erase(0,1);
+        p_ChatBox.AddLog("%s", msg.c_str());
     }
 }
 void ParseData(int plrid, char* data)
@@ -1202,28 +1142,23 @@ int __fastcall StaticHook(void)
     HMODULE hD3D8Dll;
     do
     {
-        printf(" Loading d3d8.dll->\n");
         hD3D8Dll = GetModuleHandle("d3d8.dll");
         Sleep(20);
-        printf("OK!\n");
     } while (!hD3D8Dll);
 
-    printf("Enable Device [GTA3]");
     DWORD_PTR* VtablePtr = _FindDevice((DWORD)hD3D8Dll, 0x128000);
-    printf("OK!\n");
 
     if (VtablePtr == NULL)
     {
-        MessageBox(NULL, "Device Not Found !! Please try again", 0, MB_ICONSTOP);
+        MessageBox(NULL, "Device not found", 0, MB_ICONSTOP);
         ExitProcess(TRUE);
     }
+
     DWORD_PTR* VTable = 0;
     *(DWORD_PTR*)&VTable = *(DWORD_PTR*)VtablePtr;
-    printf("OK!\n");
+
     pPresent = (Present_t)DetourFunction((PBYTE)VTable[15], (LPBYTE)nPresent);
     pReset = (Reset_t)DetourFunction((PBYTE)VTable[14], (LPBYTE)nReset);
-    printf("OK!\n");
-
 
     return(0);
 }
@@ -1237,8 +1172,6 @@ void LostConnection()
     IsConnectedToServer = false;
     enet_peer_disconnect(peer, 0);
     p_ChatBox.AddLog("You have lost connection to the server");
-
-    
 }
 
 void ProcessSync()
@@ -1325,66 +1258,6 @@ unsigned int getfilesize(const char* path)
 bool is_dll_loaded(LPCSTR moduleName)
 {
     return GetModuleHandle(moduleName);
-}
-void InitD3DStuff() { printf("Initd3dstuff"); }
-void TheSceneEnd() { printf("SceneEnd"); }
-
-void SendKeyEvent(DWORD key, bool state) // state: true == down, false == up.
-{
-
-}
-
-BOOL HandleCharacterInput(DWORD dwChar)
-{
-    return FALSE;
-}
-
-WNDPROC hOldProc;
-
-LRESULT APIENTRY NewWndProc(HWND, UINT, WPARAM, LPARAM);
-
-BOOL HandleKeyPress(DWORD vKey)
-{
-    return FALSE;
-}
-
-
-LRESULT APIENTRY NewWndProc(HWND hwnd, UINT uMsg,
-    WPARAM wParam, LPARAM lParam)
-{
-  //  if (pGUI) pGUI->MsgProc(hwnd, uMsg, wParam, lParam);
-    switch (uMsg) {
-    case WM_KEYUP:
-    {
-        SendKeyEvent((DWORD)wParam, false);
-        if (HandleKeyPress((DWORD)wParam)) { // 'I' handled it.
-            return 0;
-        }
-    }
-    break;
-    case WM_KEYDOWN:
-    {
-        SendKeyEvent((DWORD)wParam, true);
-    }
-    break;
-    case WM_CHAR:
-        if (HandleCharacterInput((DWORD)wParam)) { // 'I' handled it.
-            return 0;
-        }
-        break;
-    }
-    return CallWindowProc(hOldProc, hwnd, uMsg, wParam, lParam);
-}
-
-BOOL SubclassGameWindow(HWND hWnd)
-{
-    printf("Ha wu en de");
-    if (hWnd) {
-        hOldProc = SubclassWindow(hWnd, NewWndProc);
-        return TRUE;
-    }
-    printf("CRasher");
-    return FALSE;
 }
 
 LPDIRECT3DDEVICE8 p_Device;

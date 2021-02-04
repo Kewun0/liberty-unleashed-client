@@ -122,17 +122,13 @@ struct ScopedTransform
 	}
 };
 
-// This is the main rendering function that you have to implement and provide to ImGui (via setting up 'RenderDrawListsFn' in the ImGuiIO structure)
-// If text or lines are blurry when integrating ImGui in your engine:
-// - in your Render function, try translating your projection matrix by (0.5f,0.5f) or (0.375f,0.375f)
+
 void ImGui_ImplDX8_RenderDrawLists(ImDrawData* draw_data)
 {
-	// Avoid rendering when minimized
 	ImGuiIO& io = ImGui::GetIO();
 	if (io.DisplaySize.x <= 0.0f || io.DisplaySize.y <= 0.0f)
 		return;
 
-	// Create and grow buffers if needed
 	if (!g_pVB || g_VertexBufferSize < draw_data->TotalVtxCount)
 	{
 		
@@ -141,6 +137,7 @@ void ImGui_ImplDX8_RenderDrawLists(ImDrawData* draw_data)
 		if (IDirect3DDevice8_CreateVertexBuffer(g_pd3dDevice,g_VertexBufferSize * sizeof(CUSTOMVERTEX), D3DUSAGE_DYNAMIC | D3DUSAGE_WRITEONLY, D3DFVF_CUSTOMVERTEX, D3DPOOL_DEFAULT, &g_pVB) < 0)
 			return;
 	}
+
 	if (!g_pIB || g_IndexBufferSize < draw_data->TotalIdxCount)
 	{
 		
@@ -150,7 +147,6 @@ void ImGui_ImplDX8_RenderDrawLists(ImDrawData* draw_data)
 			return;
 	}
 
-	// Copy and convert all vertices into a single contiguous buffer
 	CUSTOMVERTEX* vtx_dst;
 	ImDrawIdx* idx_dst;
 	if (IDirect3DVertexBuffer8_Lock(g_pVB,0, (UINT)(draw_data->TotalVtxCount * sizeof(CUSTOMVERTEX)), (BYTE**)&vtx_dst, D3DLOCK_DISCARD) < 0)
@@ -176,11 +172,18 @@ void ImGui_ImplDX8_RenderDrawLists(ImDrawData* draw_data)
 		memcpy(idx_dst, cmd_list->IdxBuffer.Data, cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx));
 		idx_dst += cmd_list->IdxBuffer.Size;
 	}
+	
+
 	IDirect3DVertexBuffer8_Unlock(g_pVB);
 	IDirect3DIndexBuffer8_Unlock(g_pIB);
 	IDirect3DDevice8_SetStreamSource(g_pd3dDevice,0, g_pVB, sizeof(CUSTOMVERTEX));
 	IDirect3DDevice8_SetVertexShader(g_pd3dDevice,D3DFVF_CUSTOMVERTEX); 
-														
+
+	
+	D3DVIEWPORT8 old_vp;
+	DWORD p_shader;
+	IDirect3DDevice8_GetPixelShader(g_pd3dDevice, &p_shader);
+	IDirect3DDevice8_GetViewport(g_pd3dDevice, &old_vp);
 	D3DVIEWPORT8 vp;
 	vp.X = vp.Y = 0;
 	vp.Width = (DWORD)io.DisplaySize.x;
@@ -272,6 +275,8 @@ void ImGui_ImplDX8_RenderDrawLists(ImDrawData* draw_data)
 	IDirect3DDevice8_SetTransform(g_pd3dDevice, D3DTS_WORLD, &last_world);
 	IDirect3DDevice8_SetTransform(g_pd3dDevice, D3DTS_VIEW, &last_view);
 	IDirect3DDevice8_SetTransform(g_pd3dDevice, D3DTS_PROJECTION, &last_projection);
+	IDirect3DDevice8_SetViewport(g_pd3dDevice, &old_vp);
+	IDirect3DDevice8_SetPixelShader(g_pd3dDevice, p_shader);
 }
 
 IMGUI_API LRESULT ImGui_ImplDX8_WndProcHandler(HWND, UINT msg, WPARAM wParam, LPARAM lParam)

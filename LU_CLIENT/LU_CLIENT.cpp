@@ -74,6 +74,7 @@ extern unsigned char SCMData;
 
 
 BOOL					bWindowedMode = false;
+BOOL                    bChatEnabled = true;
 
 IDirect3DDevice8* pD3DDevice;
 
@@ -213,6 +214,24 @@ GTA_CONTROLSET gcsRemotePlayerKeys[50];
 CPed* FindLocalPlayer() { return CWorld::Players[0].m_pPed; }
 
 int iPlayerNumber = 1;
+
+void DrawBox(IDirect3DDevice8* pDevice, int x, int y, int w, int h, D3DCOLOR col)
+{
+    struct {
+        float x, y, z, rhw;
+        DWORD dwColor;
+    } qV[4] = { { (float)x    , (float)(y + h), 0.0f, 0.0f, col},
+                { (float)x    , (float)y    , 0.0f, 0.0f, col},
+                { (float)(x + w), (float)(y + h), 0.0f, 0.0f, col},
+                { (float)(x + w), (float)y    , 0.0f, 0.0f, col} };
+
+    IDirect3DDevice8_SetPixelShader(pDevice,NULL);
+    IDirect3DDevice8_SetRenderState(pDevice,D3DRS_ALPHABLENDENABLE, true);
+    IDirect3DDevice8_SetRenderState(pDevice,D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
+    IDirect3DDevice8_SetTexture(pDevice,0, NULL);
+    IDirect3DDevice8_DrawPrimitiveUP(pDevice,D3DPT_TRIANGLESTRIP, 2, qV, sizeof(qV[0]));
+}
+
 
 BYTE FindPlayerNumFromPedPtr(DWORD dwPedPtr)
 {
@@ -1180,7 +1199,7 @@ HRESULT __stdcall nPresent(LPDIRECT3DDEVICE8 pDevice, CONST RECT* pSourceRect, C
     }
     else
     {
-        RenderChatbox();
+        if ( bChatEnabled ) RenderChatbox();
     }
 
     _asm POPAD;
@@ -1511,7 +1530,6 @@ public:
 
         Events::initRwEvent += []
         {
-
             int txd = CTxdStore::AddTxdSlot("menu");
             CTxdStore::LoadTxd(txd, "models/menu.txd");
             CTxdStore::AddRef(txd);
@@ -1523,8 +1541,6 @@ public:
             mySprite.SetTexture(mousetxd,moualp);
 
             CTxdStore::PopCurrentTxd();
-
-           
 
             srand(time(NULL));
 
@@ -1557,6 +1573,7 @@ public:
         {
             if (KeyPressed(VK_ESCAPE)) paused = 1;
             if (KeyPressed('T')) { if (mouse == 0) { mouse = 1; } }
+            if (KeyPressed(VK_F5)) { bChatEnabled = !bChatEnabled; Sleep(100); }
             
             IsPaused();
             if (FindPlayerPed())

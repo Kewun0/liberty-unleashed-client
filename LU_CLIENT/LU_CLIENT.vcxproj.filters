@@ -6,25 +6,9 @@
     <ClCompile Include="imgui\imgui_draw.cpp" />
     <ClCompile Include="imgui\imgui_widgets.cpp" />
     <ClCompile Include="imgui\directx8\imgui_impl_dx8.cpp" />
-    <ClCompile Include="d3dhook\d3d8hook.cpp">
-      <Filter>d3d8hook</Filter>
-    </ClCompile>
-    <ClCompile Include="d3dhook\IDirect3D8Hook.cpp">
-      <Filter>d3d8hook</Filter>
-    </ClCompile>
-    <ClCompile Include="d3dhook\IDirect3DDevice8Hook.cpp">
-      <Filter>d3d8hook</Filter>
-    </ClCompile>
-    <ClCompile Include="d3dhook\IDirectInput8Hook.cpp">
-      <Filter>d3d8hook</Filter>
-    </ClCompile>
-    <ClCompile Include="d3dhook\IDirectInputDevice8Hook.cpp">
-      <Filter>d3d8hook</Filter>
-    </ClCompile>
     <ClCompile Include="imgui\directx8\imgui_impl_win32.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="includes\FastCRC.h" />
     <ClInclude Include="imgui\imconfig.h" />
     <ClInclude Include="imgui\imgui.h" />
     <ClInclude Include="imgui\imgui_internal.h" />
@@ -32,26 +16,6 @@
     <ClInclude Include="imgui\imstb_textedit.h" />
     <ClInclude Include="imgui\imstb_truetype.h" />
     <ClInclude Include="imgui\directx8\imgui_impl_dx8.h" />
-    <ClInclude Include="d3dhook\d3d8hook.h">
-      <Filter>d3d8hook</Filter>
-    </ClInclude>
-    <ClInclude Include="d3dhook\IDirect3D8Hook.h">
-      <Filter>d3d8hook</Filter>
-    </ClInclude>
-    <ClInclude Include="d3dhook\IDirect3DDevice8Hook.h">
-      <Filter>d3d8hook</Filter>
-    </ClInclude>
-    <ClInclude Include="d3dhook\IDirectInput8Hook.h">
-      <Filter>d3d8hook</Filter>
-    </ClInclude>
-    <ClInclude Include="d3dhook\IDirectInputDevice8Hook.h">
-      <Filter>d3d8hook</Filter>
-    </ClInclude>
     <ClInclude Include="imgui\directx8\imgui_impl_win32.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <Filter Include="d3d8hook">
-      <UniqueIdentifier>{64e1f530-e28d-43c4-be74-8d8bf55299b8}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
 </Project>

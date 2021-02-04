@@ -104,11 +104,6 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="d3dhook\d3d8hook.cpp" />
-    <ClCompile Include="d3dhook\IDirect3D8Hook.cpp" />
-    <ClCompile Include="d3dhook\IDirect3DDevice8Hook.cpp" />
-    <ClCompile Include="d3dhook\IDirectInput8Hook.cpp" />
-    <ClCompile Include="d3dhook\IDirectInputDevice8Hook.cpp" />
     <ClCompile Include="imgui\directx8\imgui_impl_dx8.cpp" />
     <ClCompile Include="imgui\directx8\imgui_impl_win32.cpp" />
     <ClCompile Include="imgui\imgui.cpp" />
@@ -117,11 +112,6 @@
     <ClCompile Include="LU_CLIENT.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="d3dhook\d3d8hook.h" />
-    <ClInclude Include="d3dhook\IDirect3D8Hook.h" />
-    <ClInclude Include="d3dhook\IDirect3DDevice8Hook.h" />
-    <ClInclude Include="d3dhook\IDirectInput8Hook.h" />
-    <ClInclude Include="d3dhook\IDirectInputDevice8Hook.h" />
     <ClInclude Include="imgui\directx8\imgui_impl_dx8.h" />
     <ClInclude Include="imgui\directx8\imgui_impl_win32.h" />
     <ClInclude Include="imgui\imconfig.h" />
@@ -130,7 +120,6 @@
     <ClInclude Include="imgui\imstb_rectpack.h" />
     <ClInclude Include="imgui\imstb_textedit.h" />
     <ClInclude Include="imgui\imstb_truetype.h" />
-    <ClInclude Include="includes\FastCRC.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

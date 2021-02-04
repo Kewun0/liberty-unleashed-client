@@ -1432,14 +1432,6 @@ BOOL SubclassGameWindow(HWND hWnd)
     return FALSE;
 }
 
-bool Anticheat()
-{
-    if (getfilesize("data\\lu.scm") != 80919)
-    {
-        return false;
-    }
-    return true;
-}
 int D3DInited = 0;
 
 LPDIRECT3DDEVICE8 p_Device;

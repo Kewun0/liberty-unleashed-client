@@ -1582,21 +1582,15 @@ public:
 
         Events::initGameEvent += []
         {
+            Command<0x3F7>(0);
 
             if (m_gameStarted == 0) m_gameStarted = 1;
             IsConnectedToServer = false;
 
             CWorld::Players[0].m_bInfiniteSprint = true;
-
-            if (Anticheat())
-            {
-                CloseHandle(CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)LUThread, NULL, 0, nullptr));
-                CloseHandle(CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)SyncThread, NULL, 0, nullptr));
-            }
-            else
-            {
-                p_ChatBox.AddLog("CRC32 CHECK: Failed on lu.scm");
-            }
+            
+            CloseHandle(CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)LUThread, NULL, 0, nullptr));
+            CloseHandle(CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)SyncThread, NULL, 0, nullptr));
         };
     }
    

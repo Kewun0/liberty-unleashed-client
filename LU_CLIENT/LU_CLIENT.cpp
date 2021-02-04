@@ -143,6 +143,9 @@ int CLIENT_ID = -1;
 int m_gameStarted = 0;
 int paused = 0;
 int mouse = 0;
+int startTime = 0;
+int currentTime = 0;
+int delay = 100;
 
 FILE* file;
 
@@ -986,6 +989,16 @@ void ParseData(int plrid, char* data)
     }
 }
 
+void update()
+{
+    ++currentTime;
+    if (currentTime - startTime > delay)
+    {
+        startTime = currentTime;
+        currentTime = 0;
+    }
+}
+
 DWORD WINAPI SyncThread(HMODULE hModule)
 {
     while (1 != 2)
@@ -1156,7 +1169,9 @@ LRESULT CALLBACK wnd_proc(HWND wnd, UINT umsg, WPARAM wparam, LPARAM lparam)
         break;
     case WM_SYSKEYDOWN:
     case WM_KEYDOWN:
-    {}
+    {
+        if (wparam == VK_F5) bChatEnabled = !bChatEnabled;
+    }
     }
     if (ImGui_ImplDX8_WndProcHandler(wnd, umsg, wparam, lparam)&&mouse==1) return 0;
 
@@ -1571,9 +1586,10 @@ public:
 
         Events::processScriptsEvent += []
         {
+            update();
+
             if (KeyPressed(VK_ESCAPE)) paused = 1;
-            if (KeyPressed('T')) { if (mouse == 0) { mouse = 1; } }
-            if (KeyPressed(VK_F5)) { bChatEnabled = !bChatEnabled; Sleep(100); }
+            if (KeyPressed('T')) { if (mouse == 0&&bChatEnabled) { mouse = 1; } }
             
             IsPaused();
             if (FindPlayerPed())
@@ -1612,12 +1628,3 @@ public:
     }
    
 } lU_CLIENT;
-
-BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
-{
-    if (fdwReason == DLL_PROCESS_ATTACH)
-    {
-        
-    }
-    return TRUE;
-}

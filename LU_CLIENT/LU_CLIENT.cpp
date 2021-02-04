@@ -30,14 +30,11 @@
 #define	KEY_ONFOOT_CROUCH			16
 #define	KEY_ONFOOT_LOOKBEHIND		17
 #define FUNC_CPlayerPed__ProcessControl 0x4EFD90
-#define FUNC_CWeapon__DoBulletImpact 0x55F950
 #define FUNC_CAutomobile__ProcessControl 0x531470
 #define _pad(x,y) BYTE x[y]
 #define ADDR_KEYSTATES 0x6F0360
 #define  _SL_STATIC
 #define NUDE void _declspec(naked) 
-
-
 
 #include "plugin.h"
 #include "CMenuManager.h"
@@ -54,9 +51,10 @@
 #include <stdio.h>
 #include <thread>
 #include <enet/enet.h>
+#include <detours.h>
 #include <io.h>
 #include <stdlib.h>
-#include <chrono>
+#include <chrono> 
 #include <windowsx.h>
 #include <map> 
 #include <d3d8.h>
@@ -131,7 +129,6 @@ char(__thiscall* original_CPed__InflictDamage)(CPed*, CEntity*, eWeaponType, flo
 
 int(__thiscall* original_CPlayerPed__ProcessControl)(CPlayerPed*);
 int(__thiscall* original_CAutomobile__ProcessControl)(CAutomobile*);
-int(__thiscall* original_CWeapon__DoBulletImpact)(CWeapon* This, CEntity*, CEntity*, CVector*, CVector*, CColPoint*, CVector2D);
  
 
 void onD3DRender(LPDIRECT3DDEVICE8 pDevice);
@@ -146,12 +143,11 @@ int mouse = 0;
 int startTime = 0;
 int currentTime = 0;
 int delay = 100;
+int D3DInited = 0;
 
 FILE* file;
 
 void _stdcall SwitchContext(DWORD dwPedPtr, bool bPrePost);
-void InstallD3D8Hook();
-void UninstallD3D8Hook();
 
 typedef struct _GTA_CONTROLSET
 {
@@ -284,30 +280,6 @@ float ImGui_ProgressBar(const char* optionalPrefixText, float value, const float
     ImGui::Text(format, needsPercConversion ? (valueFraction * 100.f + 0.0001f) : value);
     return valueFraction;
 
-}
-
-int __fastcall CWeapon__DoBulletImpact_Hook(CWeapon* This, DWORD _EDX, CEntity* source, CEntity* target, CVector* start, CVector* end, CColPoint* colpoint, CVector2D ahead)
-{
-    return original_CWeapon__DoBulletImpact(This, source, target, start, end, colpoint, ahead);
-}
-
-void Initialize()
-{
-    tWindow = FindWindow(0, "GTA3");
-    if (tWindow) {
-        OldWndProc = (WNDPROC)SetWindowLongPtr(tWindow, GWLP_WNDPROC, (LONG_PTR)HookedWndProc);
-    }
-
-}
-
-void Set()
-{
-    SetWindowLongPtr(tWindow, GWLP_WNDPROC, (LONG_PTR)HookedWndProc);
-}
-
-void Restore()
-{
-    SetWindowLongPtr(tWindow, GWLP_WNDPROC, (LONG_PTR)OldWndProc);
 }
 
 void SendPacket(ENetPeer* peer, const char* data)
@@ -462,7 +434,7 @@ struct ChatBox
         {
             IsConnectedToServer = false;
             enet_peer_disconnect(peer, 0);
-            Sleep(1000);
+            Sleep(500);
             exit(-1);
         }
 
@@ -564,27 +536,14 @@ static ChatBox p_ChatBox;
 
 LRESULT __stdcall HookedWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-
     ImGuiIO& io = ImGui::GetIO();
-
-    io.MouseDrawCursor = false; //to view mouse
+    io.MouseDrawCursor = false;
     if (1==1)
     {
-        //ImGUI implementation windproc
         ImGui_ImplDX8_WndProcHandler(hWnd, uMsg, wParam, lParam);
-        //Calls and return the default window procedure.
         return DefWindowProc(hWnd, uMsg, wParam, lParam);
     }
     return FALSE;
-}
-
-bool CRC32(const char* filename, char* checksumhex)
-{
-    unsigned long checksum;
-   // if (CFastCRC32::Calculate(&checksum, filename) != 0)
-     //   return false;
-   // SL_FCRC_ConvertToHex32(checksumhex, checksum, 0);
-    return true;
 }
 
 void InstallMethodHook(DWORD dwInstallAddress, DWORD dwHookFunction)
@@ -599,8 +558,6 @@ char __fastcall CPlayerPed__ProcessControl_Hook(CPlayerPed* This, DWORD _EDX)
 {
     return original_CPlayerPed__ProcessControl(This);
 }
-
-#include <detours.h>
 
 bool Hook(void* toHook, void* ourFunct, int len)
 {
@@ -1263,8 +1220,6 @@ int __fastcall StaticHook(void)
     DWORD_PTR* VTable = 0;
     *(DWORD_PTR*)&VTable = *(DWORD_PTR*)VtablePtr;
     printf("OK!\n");
-    printf("%s - Hooking Class->");
-   
     pPresent = (Present_t)DetourFunction((PBYTE)VTable[15], (LPBYTE)nPresent);
     pReset = (Reset_t)DetourFunction((PBYTE)VTable[14], (LPBYTE)nReset);
     printf("OK!\n");
@@ -1431,8 +1386,6 @@ BOOL SubclassGameWindow(HWND hWnd)
     printf("CRasher");
     return FALSE;
 }
-
-int D3DInited = 0;
 
 LPDIRECT3DDEVICE8 p_Device;
 
@@ -1606,5 +1559,4 @@ public:
             CloseHandle(CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)SyncThread, NULL, 0, nullptr));
         };
     }
-   
 } lU_CLIENT;

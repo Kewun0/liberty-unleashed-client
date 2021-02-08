@@ -55,6 +55,7 @@
 #include <io.h>
 #include <stdlib.h>
 #include <chrono> 
+#include <tlhelp32.h>
 #include <windowsx.h>
 #include <map> 
 #include <d3d8.h>
@@ -986,20 +987,13 @@ DWORD WINAPI LUThread(HMODULE hModule)
         switch (event.type)
         {
         case ENET_EVENT_TYPE_RECEIVE:
+
             last_sync_packet = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-
-
-           /* printf("A packet of length %u containing %s was received from %x:%u on channel %u.\n",
-                event.packet->dataLength,
-                event.packet->data,
-                event.peer->address.host,
-                event.peer->address.port,
-                event.channelID);*/
             char data[256];
             sprintf(data, "%s", event.packet->data);
             ParseData(static_cast<Clients*>(event.peer->data)->GetID(), data);
-
             enet_packet_destroy(event.packet);
+
             break;
         }
     }
@@ -1119,6 +1113,20 @@ HRESULT __stdcall nPresent(LPDIRECT3DDEVICE8 pDevice, CONST RECT* pSourceRect, C
     return  pPresent(pDevice, pSourceRect, pDestRect, hDestWindowOverride, pDirtyRegion);
 }
 
+bool bCompare(const BYTE* pData, const BYTE* bMask, const char* szMask)
+{
+    for (; *szMask; ++szMask, ++pData, ++bMask)
+        if (*szMask == 'x' && *pData != *bMask)   return 0;
+    return (*szMask) == NULL;
+}
+
+DWORD FindPattern(DWORD dwAddress, DWORD dwLen, BYTE* bMask, char* szMask)
+{
+    for (DWORD i = 0; i < dwLen; i++)
+        if (bCompare((BYTE*)(dwAddress + i), bMask, szMask))  return (DWORD)(dwAddress + i);
+    return 0;
+}
+
 DWORD_PTR* _FindDevice(DWORD Base, DWORD Len)
 {
     unsigned long i = 0, n = 0;
@@ -1136,17 +1144,66 @@ DWORD_PTR* _FindDevice(DWORD Base, DWORD Len)
     return(0);
 }
 
+DWORD GetModuleSize(LPSTR lpModuleName, DWORD dwProcessId)
+{
+    MODULEENTRY32 lpModuleEntry = { 0 };
+
+    HANDLE hSnapShot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, dwProcessId);
+
+    if (!hSnapShot)
+        return NULL;
+
+    lpModuleEntry.dwSize = sizeof(lpModuleEntry);
+
+    BOOL bModule = Module32First(hSnapShot, &lpModuleEntry);
+
+    while (bModule)
+    {
+        if (!strcmp(lpModuleEntry.szModule, lpModuleName))
+        {
+            CloseHandle(hSnapShot);
+
+            return (DWORD)lpModuleEntry.modBaseAddr;
+        }
+
+        bModule = Module32Next(hSnapShot, &lpModuleEntry);
+    }
+
+    CloseHandle(hSnapShot);
+
+    return NULL;
+}
+
+
+
 int __fastcall StaticHook(void)
 {
+    printf("Trying to hook d3d8\n");
 
+    DWORD* VTableHook = 0;
     HMODULE hD3D8Dll;
+    DWORD d3d8dll;
     do
     {
-        hD3D8Dll = GetModuleHandle("d3d8.dll");
-        Sleep(20);
-    } while (!hD3D8Dll);
+        d3d8dll = (DWORD)GetModuleHandle("d3d8.dll");
+        Sleep(10);
 
-    DWORD_PTR* VtablePtr = _FindDevice((DWORD)hD3D8Dll, 0x128000);
+    } while (d3d8dll == NULL);
+
+    printf("d3d8.dll found\n");
+
+    char mask[32];
+    sprintf(mask, "xx????xx????xx");
+
+    printf("Scanning pattern\n");
+
+    DWORD VtablePtr = FindPattern(d3d8dll, 0x128000, (PBYTE)"\xC7\x06\x00\x00\x00\x00\x89\x86\x00\x00\x00\x00\x89\x86", mask);
+
+    printf("Copying to memory\n");
+
+    memcpy(&VTableHook, (void*)(VtablePtr + 2), 4);
+
+    printf("Pattern found\n");
 
     if (VtablePtr == NULL)
     {
@@ -1154,11 +1211,15 @@ int __fastcall StaticHook(void)
         ExitProcess(TRUE);
     }
 
-    DWORD_PTR* VTable = 0;
-    *(DWORD_PTR*)&VTable = *(DWORD_PTR*)VtablePtr;
+    DWORD dwReset = VTableHook[14];
+    DWORD dwPresent = VTableHook[15];
 
-    pPresent = (Present_t)DetourFunction((PBYTE)VTable[15], (LPBYTE)nPresent);
-    pReset = (Reset_t)DetourFunction((PBYTE)VTable[14], (LPBYTE)nReset);
+    printf("Hooking \n");
+
+    pPresent = (Present_t)DetourFunction((PBYTE)dwPresent, (LPBYTE)nPresent);
+    printf("pPresent -> Hooked\n");
+    pReset = (Reset_t)DetourFunction((PBYTE)dwReset, (LPBYTE)nReset);
+    printf("pReset -> Hooked\n");
 
     return(0);
 }
@@ -1352,10 +1413,11 @@ public:
         patch::Nop(0x485168, 5); // Disable Pause 2
         patch::Nop(0x48C26B, 5); // Don't init scripts
         patch::Nop(0x48C32F, 5); // Don't process
+        patch::Nop(0x48C975, 5); // Disable Replays
 
         Hook((void*)0x48C334, CreatePlayer, 5);
 
-        if (debug == 1)
+        if (debug == 1) 
         {
             AllocConsole();
             freopen("CONOUT$", "w", stdout);
@@ -1369,8 +1431,7 @@ public:
 
             GameKeyStatesInit();
             InstallMethodHook(0x5FA308, (DWORD)CPlayerPed_ProcessControl_Hook);
-            patch::Nop(0x48C975, 5); // Disable Replays
-
+            
             char loadsc4[9] = "mainsc1";
 
             if (fopen("txd\\lu.txd", "r") != NULL)

@@ -1,9 +1,21 @@
+/*
+ *  Original work: Copyright (c) 2014, Oculus VR, Inc.
+ *  All rights reserved.
+ *
+ *  This source code is licensed under the BSD-style license found in the
+ *  RakNet License.txt file in the licenses directory of this source tree. An additional grant 
+ *  of patent rights can be found in the RakNet Patents.txt file in the same directory.
+ *
+ *
+ *  Modified work: Copyright (c) 2017, SLikeSoft UG (haftungsbeschränkt)
+ *
+ *  This source code was modified by SLikeSoft. Modifications are licensed under the MIT-style
+ *  license found in the license.txt file in the root directory of this source tree.
+ */
+
 /// \file
 /// \brief This will write all incoming and outgoing network messages to the log command parser, which can be accessed through Telnet
 ///
-/// This file is part of RakNet Copyright 2003 Jenkins Software LLC
-///
-/// Usage of RakNet is subject to the appropriate license agreement.
 
 #include "NativeFeatureIncludes.h"
 #if _RAKNET_SUPPORT_LogCommandParser==1 && _RAKNET_SUPPORT_PacketLogger==1
@@ -13,7 +25,7 @@
 
 #include "PacketLogger.h"
 
-namespace RakNet
+namespace SLNet
 {
 /// Forward declarations
 class LogCommandParser;
@@ -31,7 +43,7 @@ protected:
 	LogCommandParser *logCommandParser;
 };
 
-} // namespace RakNet
+} // namespace SLNet
 
 #endif
 

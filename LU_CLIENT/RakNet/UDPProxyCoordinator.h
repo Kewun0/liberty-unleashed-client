@@ -1,30 +1,38 @@
+/*
+ *  Original work: Copyright (c) 2014, Oculus VR, Inc.
+ *  All rights reserved.
+ *
+ *  This source code is licensed under the BSD-style license found in the
+ *  RakNet License.txt file in the licenses directory of this source tree. An additional grant 
+ *  of patent rights can be found in the RakNet Patents.txt file in the same directory.
+ *
+ *
+ *  Modified work: Copyright (c) 2017, SLikeSoft UG (haftungsbeschränkt)
+ *
+ *  This source code was modified by SLikeSoft. Modifications are licensed under the MIT-style
+ *  license found in the license.txt file in the root directory of this source tree.
+ */
+
 /// \file
 /// \brief Essentially maintains a list of servers running UDPProxyServer, and some state management for UDPProxyClient to find a free server to forward datagrams
 ///
-/// This file is part of RakNet Copyright 2003 Jenkins Software LLC
-///
-/// Usage of RakNet is subject to the appropriate license agreement.
-/// Creative Commons Licensees are subject to the
-/// license found at
-/// http://creativecommons.org/licenses/by-nc/2.5/
-/// Single application licensees are subject to the license found at
-/// http://www.jenkinssoftware.com/SingleApplicationLicense.html
-/// Custom license users are subject to the terms therein.
+
 
 #include "NativeFeatureIncludes.h"
-#if _RAKNET_SUPPORT_UDPProxyCoordinator==1
+#if _RAKNET_SUPPORT_UDPProxyCoordinator==1 && _RAKNET_SUPPORT_UDPForwarder==1
 
 #ifndef __UDP_PROXY_COORDINATOR_H
 #define __UDP_PROXY_COORDINATOR_H
 
 #include "Export.h"
-#include "DS_Multilist.h"
-#include "RakNetTypes.h"
+#include "types.h"
 #include "PluginInterface2.h"
-#include "RakString.h"
+#include "string.h"
 #include "BitStream.h"
+#include "DS_Queue.h"
+#include "DS_OrderedList.h"
 
-namespace RakNet
+namespace SLNet
 {
 	/// When NAT Punchthrough fails, it is possible to use a non-NAT system to forward messages from us to the recipient, and vice-versa
 	/// The class to forward messages is UDPForwarder, and it is triggered over the network via the UDPProxyServer plugin.
@@ -43,17 +51,19 @@ namespace RakNet
 		/// For UDPProxyServers logging in remotely, they must pass a password to UDPProxyServer::LoginToCoordinator(). It must match the password set here.
 		/// If no password is set, they cannot login remotely.
 		/// By default, no password is set
-		void SetRemoteLoginPassword(RakNet::RakString password);
+		void SetRemoteLoginPassword(SLNet::RakString password);
 
 		/// \internal
 		virtual void Update(void);
 		virtual PluginReceiveResult OnReceive(Packet *packet);
-		virtual void OnClosedConnection(SystemAddress systemAddress, RakNetGUID rakNetGUID, PI2_LostConnectionReason lostConnectionReason );
+		virtual void OnClosedConnection(const SystemAddress &systemAddress, RakNetGUID rakNetGUID, PI2_LostConnectionReason lostConnectionReason );
 
 		struct SenderAndTargetAddress
 		{
 			SystemAddress senderClientAddress;
+			RakNetGUID senderClientGuid;
 			SystemAddress targetClientAddress;
+			RakNetGUID targetClientGuid;
 		};
 
 		struct ServerWithPing
@@ -64,39 +74,44 @@ namespace RakNet
 
 		struct ForwardingRequest
 		{
-			RakNet::TimeMS timeoutOnNoDataMS;
-			RakNet::TimeMS timeoutAfterSuccess;
+			SLNet::TimeMS timeoutOnNoDataMS;
+			SLNet::TimeMS timeoutAfterSuccess;
 			SenderAndTargetAddress sata;
 			SystemAddress requestingAddress; // Which system originally sent the network message to start forwarding
 			SystemAddress currentlyAttemptedServerAddress;
-			DataStructures::Multilist<ML_QUEUE, SystemAddress> remainingServersToTry;
-			RakNet::BitStream serverSelectionBitstream;
+			DataStructures::Queue<SystemAddress> remainingServersToTry;
+			SLNet::BitStream serverSelectionBitstream;
 
-			DataStructures::Multilist<ML_STACK, ServerWithPing, unsigned short> sourceServerPings, targetServerPings;
-			RakNet::TimeMS timeRequestedPings;
+			DataStructures::List<ServerWithPing> sourceServerPings, targetServerPings;
+			SLNet::TimeMS timeRequestedPings;
 			// Order based on sourceServerPings and targetServerPings
 			void OrderRemainingServersToTry(void);
 		
 		};
-
 	protected:
+
+		static int ServerWithPingComp( const unsigned short &key, const UDPProxyCoordinator::ServerWithPing &data );
+		static int ForwardingRequestComp( const SenderAndTargetAddress &key, ForwardingRequest* const &data);
+
 		void OnForwardingRequestFromClientToCoordinator(Packet *packet);
 		void OnLoginRequestFromServerToCoordinator(Packet *packet);
 		void OnForwardingReplyFromServerToCoordinator(Packet *packet);
 		void OnPingServersReplyFromClientToCoordinator(Packet *packet);
 		void TryNextServer(SenderAndTargetAddress sata, ForwardingRequest *fw);
-		void SendAllBusy(SystemAddress senderClientAddress, SystemAddress targetClientAddress, SystemAddress requestingAddress);
+		void SendAllBusy(SystemAddress senderClientAddress, SystemAddress targetClientAddress, RakNetGUID targetClientGuid, SystemAddress requestingAddress);
 		void Clear(void);
 
-		void SendForwardingRequest(SystemAddress sourceAddress, SystemAddress targetAddress, SystemAddress serverAddress, RakNet::TimeMS timeoutOnNoDataMS);
+		void SendForwardingRequest(SystemAddress sourceAddress, SystemAddress targetAddress, SystemAddress serverAddress, SLNet::TimeMS timeoutOnNoDataMS);
 
 		// Logged in servers
-		DataStructures::Multilist<ML_UNORDERED_LIST, SystemAddress> serverList;
+		//DataStructures::Multilist<ML_UNORDERED_LIST, SystemAddress> serverList;
+		DataStructures::List<SystemAddress> serverList;
 
 		// Forwarding requests in progress
-		DataStructures::Multilist<ML_ORDERED_LIST, ForwardingRequest*, SenderAndTargetAddress> forwardingRequestList;
+		//DataStructures::Multilist<ML_ORDERED_LIST, ForwardingRequest*, SenderAndTargetAddress> forwardingRequestList;
+		DataStructures::OrderedList<SenderAndTargetAddress, ForwardingRequest*, ForwardingRequestComp> forwardingRequestList;
 
-		RakNet::RakString remoteLoginPassword;
+		SLNet::RakString remoteLoginPassword;
 
 	};
 

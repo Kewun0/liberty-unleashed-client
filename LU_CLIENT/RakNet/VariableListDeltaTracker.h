@@ -1,9 +1,27 @@
+/*
+ *  Original work: Copyright (c) 2014, Oculus VR, Inc.
+ *  All rights reserved.
+ *
+ *  This source code is licensed under the BSD-style license found in the
+ *  RakNet License.txt file in the licenses directory of this source tree. An additional grant 
+ *  of patent rights can be found in the RakNet Patents.txt file in the same directory.
+ *
+ *
+ *  Modified work: Copyright (c) 2017, SLikeSoft UG (haftungsbeschränkt)
+ *
+ *  This source code was modified by SLikeSoft. Modifications are licensed under the MIT-style
+ *  license found in the license.txt file in the root directory of this source tree.
+ */
+
 #include "NativeTypes.h"
 #include "DS_List.h"
-#include "RakMemoryOverride.h"
+#include "memoryoverride.h"
 #include "BitStream.h"
 
-namespace RakNet
+#ifndef __VARIABLE_LIST_DELTA_TRACKER
+#define __VARIABLE_LIST_DELTA_TRACKER
+
+namespace SLNet
 {
 /// Class to write a series of variables, copy the contents to memory, and return if the newly written value is different than what was last written
 /// Can also encode the reads, writes, and results directly to/from a bitstream
@@ -24,7 +42,7 @@ public:
 	template <class VarType>
 	bool WriteVar(const VarType &varData)
 	{
-		RakNet::BitStream temp;
+		SLNet::BitStream temp;
 		temp.Write(varData);
 		if (nextWriteIndex>=variableList.Size())
 		{
@@ -55,7 +73,7 @@ public:
 	}
 	/// Calls WriteVar. If the variable has changed, writes true, and writes the variable. Otherwise writes false.
 	template <class VarType>
-	bool WriteVarToBitstream(const VarType &varData, RakNet::BitStream *bitStream)
+	bool WriteVarToBitstream(const VarType &varData, SLNet::BitStream *bitStream)
 	{
 		bool wasDifferent = WriteVar(varData);
 		bitStream->Write(wasDifferent);
@@ -68,7 +86,7 @@ public:
 	}
 	/// Calls WriteVarToBitstream(). Additionally, adds the boolean result of WriteVar() to boolean bit array
 	template <class VarType>
-	bool WriteVarToBitstream(const VarType &varData, RakNet::BitStream *bitStream, unsigned char *bArray, unsigned short writeOffset)
+	bool WriteVarToBitstream(const VarType &varData, SLNet::BitStream *bitStream, unsigned char *bArray, unsigned short writeOffset)
 	{
 		if (WriteVarToBitstream(varData,bitStream)==true)
 		{
@@ -92,7 +110,7 @@ public:
 
 	/// Paired with a call to WriteVarToBitstream(), will read a variable if it had changed. Otherwise the values remains the same.
 	template <class VarType>
-	static bool ReadVarFromBitstream(const VarType &varData, RakNet::BitStream *bitStream)
+	static bool ReadVarFromBitstream(VarType &varData, SLNet::BitStream *bitStream)
 	{
 		bool wasWritten;
 		if (bitStream->Read(wasWritten)==false)
@@ -116,7 +134,7 @@ public:
 		VariableLastValueNode(const unsigned char *data, int _byteLength);
 		~VariableLastValueNode();
 		char *lastData;
-		int byteLength;
+		unsigned int byteLength;
 		bool isDirty;
 	};
 
@@ -129,3 +147,5 @@ protected:
 
 
 }
+
+#endif

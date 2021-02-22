@@ -1,3 +1,18 @@
+/*
+ *  Original work: Copyright (c) 2014, Oculus VR, Inc.
+ *  All rights reserved.
+ *
+ *  This source code is licensed under the BSD-style license found in the
+ *  RakNet License.txt file in the licenses directory of this source tree. An additional grant 
+ *  of patent rights can be found in the RakNet Patents.txt file in the same directory.
+ *
+ *
+ *  Modified work: Copyright (c) 2017, SLikeSoft UG (haftungsbeschränkt)
+ *
+ *  This source code was modified by SLikeSoft. Modifications are licensed under the MIT-style
+ *  license found in the license.txt file in the root directory of this source tree.
+ */
+
 /// \file DS_ThreadsafeAllocatingQueue.h
 /// \internal
 /// A threadsafe queue, that also uses a memory pool for allocation
@@ -9,11 +24,11 @@
 #include "SimpleMutex.h"
 #include "DS_MemoryPool.h"
 
-#if defined(new)
-#pragma push_macro("new")
-#undef new
-#define RMO_NEW_UNDEF_ALLOCATING_QUEUE
-#endif
+// #if defined(new)
+// #pragma push_macro("new")
+// #undef new
+// #define RMO_NEW_UNDEF_ALLOCATING_QUEUE
+// #endif
 
 namespace DataStructures
 {
@@ -28,6 +43,9 @@ public:
 	structureType *Pop(void);
 	void SetPageSize(int size);
 	bool IsEmpty(void);
+	structureType * operator[] ( unsigned int position );
+	void RemoveAtIndex( unsigned int position );
+	unsigned int Size( void );
 
 	// Memory pool operations
 	structureType *Allocate(const char *file, unsigned int line);
@@ -35,10 +53,10 @@ public:
 	void Clear(const char *file, unsigned int line);
 protected:
 
-	MemoryPool<structureType> memoryPool;
-	RakNet::SimpleMutex memoryPoolMutex;
+	mutable MemoryPool<structureType> memoryPool;
+	SLNet::SimpleMutex memoryPoolMutex;
 	Queue<structureType*> queue;
-	RakNet::SimpleMutex queueMutex;
+	SLNet::SimpleMutex queueMutex;
 };
 	
 template <class structureType>
@@ -132,12 +150,40 @@ bool ThreadsafeAllocatingQueue<structureType>::IsEmpty(void)
 	return isEmpty;
 }
 
-};
+template <class structureType>
+structureType * ThreadsafeAllocatingQueue<structureType>::operator[] ( unsigned int position )
+{
+	structureType *s;
+	queueMutex.Lock();
+	s=queue[position];
+	queueMutex.Unlock();
+	return s;
+}
+
+template <class structureType>
+void ThreadsafeAllocatingQueue<structureType>::RemoveAtIndex( unsigned int position )
+{
+	queueMutex.Lock();
+	queue.RemoveAtIndex(position);
+	queueMutex.Unlock();
+}
+
+template <class structureType>
+unsigned int ThreadsafeAllocatingQueue<structureType>::Size( void )
+{
+	unsigned int s;
+	queueMutex.Lock();
+	s=queue.Size();
+	queueMutex.Unlock();
+	return s;
+}
+
+}
 
 
-#if defined(RMO_NEW_UNDEF_ALLOCATING_QUEUE)
-#pragma pop_macro("new")
-#undef RMO_NEW_UNDEF_ALLOCATING_QUEUE
-#endif
+// #if defined(RMO_NEW_UNDEF_ALLOCATING_QUEUE)
+// #pragma pop_macro("new")
+// #undef RMO_NEW_UNDEF_ALLOCATING_QUEUE
+// #endif
 
 #endif

@@ -1,23 +1,31 @@
+/*
+ *  Original work: Copyright (c) 2014, Oculus VR, Inc.
+ *  All rights reserved.
+ *
+ *  This source code is licensed under the BSD-style license found in the
+ *  RakNet License.txt file in the licenses directory of this source tree. An additional grant 
+ *  of patent rights can be found in the RakNet Patents.txt file in the same directory.
+ *
+ *
+ *  Modified work: Copyright (c) 2016-2017, SLikeSoft UG (haftungsbeschränkt)
+ *
+ *  This source code was modified by SLikeSoft. Modifications are licensed under the MIT-style
+ *  license found in the license.txt file in the root directory of this source tree.
+ */
+
 /// \file DS_BinarySearchTree.h
 /// \internal
 /// \brief A binary search tree, and an AVL balanced BST derivation.
 ///
-/// This file is part of RakNet Copyright 2003 Jenkins Software LLC
-///
-/// Usage of RakNet is subject to the appropriate license agreement.
 
 
 #ifndef __BINARY_SEARCH_TREE_H
 #define __BINARY_SEARCH_TREE_H
 
 #include "DS_QueueLinkedList.h"
-#include "RakMemoryOverride.h"
+#include "memoryoverride.h"
 #include "Export.h"
 
-
-#ifdef _MSC_VER
-#pragma warning( push )
-#endif
 
 /// The namespace DataStructures was only added to avoid compiler errors for commonly named data structures
 /// As these data structures are stand-alone, you can use them outside of RakNet for your own projects if you wish.
@@ -61,7 +69,7 @@ namespace DataStructures
 	 * A.Add(10);
 	 * A.Add(15);
 	 * A.Add(5);
-	 * int* array = RakNet::OP_NEW<int >(A.Size(), _FILE_AND_LINE_ );
+	 * int* array = SLNet::OP_NEW<int >(A.Size(), _FILE_AND_LINE_ );
 	 * A.DisplayInorder(array);
 	 * array[0]; // returns 5
 	 * array[1]; // returns 10
@@ -456,10 +464,7 @@ namespace DataStructures
 			return current;
 		}
 
-#ifdef _MSC_VER
-#pragma warning( disable : 4127 ) // warning C4127: conditional expression is constant
-#endif
-		while ( true )
+		for (;;)
 		{
 			// Move pointer
 			
@@ -566,8 +571,8 @@ namespace DataStructures
 					parent->right = 0;
 			}
 			
-			RakNet::OP_DELETE(node_to_delete->item, file, line);
-			RakNet::OP_DELETE(node_to_delete, file, line);
+			SLNet::OP_DELETE(node_to_delete->item, file, line);
+			SLNet::OP_DELETE(node_to_delete, file, line);
 			BinarySearchTree_size--;
 			return parent;
 		}
@@ -586,9 +591,9 @@ namespace DataStructures
 				else
 					root = current->right; // Without a parent this must be the root node
 					
-				RakNet::OP_DELETE(node_to_delete->item, file, line);
+				SLNet::OP_DELETE(node_to_delete->item, file, line);
 				
-				RakNet::OP_DELETE(node_to_delete, file, line);
+				SLNet::OP_DELETE(node_to_delete, file, line);
 				
 				BinarySearchTree_size--;
 				
@@ -609,9 +614,9 @@ namespace DataStructures
 					else
 						root = current->left; // Without a parent this must be the root node
 						
-					RakNet::OP_DELETE(node_to_delete->item, file, line);
+					SLNet::OP_DELETE(node_to_delete->item, file, line);
 					
-					RakNet::OP_DELETE(node_to_delete, file, line);
+					SLNet::OP_DELETE(node_to_delete, file, line);
 					
 					BinarySearchTree_size--;
 					
@@ -630,7 +635,7 @@ namespace DataStructures
 						current = current->left;
 					}
 					
-					// Replace the value held by the node to RakNet::OP_DELETE(with the value pointed to by current, _FILE_AND_LINE_);
+					// Replace the value held by the node to SLNet::OP_DELETE(with the value pointed to by current, _FILE_AND_LINE_);
 					*( node_to_delete->item ) = *( current->item );
 					
 					// Delete current.
@@ -642,9 +647,9 @@ namespace DataStructures
 						else
 							parent->left = 0;
 							
-						RakNet::OP_DELETE(current->item, file, line);
+						SLNet::OP_DELETE(current->item, file, line);
 						
-						RakNet::OP_DELETE(current, file, line);
+						SLNet::OP_DELETE(current, file, line);
 						
 						BinarySearchTree_size--;
 						
@@ -660,9 +665,9 @@ namespace DataStructures
 						else
 							parent->left = current->right;
 							
-						RakNet::OP_DELETE(current->item, file, line);
+						SLNet::OP_DELETE(current->item, file, line);
 						
-						RakNet::OP_DELETE(current, file, line);
+						SLNet::OP_DELETE(current, file, line);
 						
 						BinarySearchTree_size--;
 						
@@ -684,8 +689,8 @@ namespace DataStructures
 		if ( BinarySearchTree_size == 0 )
 		{
 			BinarySearchTree_size = 1;
-			root = RakNet::OP_NEW<typename BinarySearchTree::node>( file, line );
-			root->item = RakNet::OP_NEW<BinarySearchTreeType>( file, line );
+			root = SLNet::OP_NEW<typename BinarySearchTree::node>( file, line );
+			root->item = SLNet::OP_NEW<BinarySearchTreeType>( file, line );
 			*( root->item ) = input;
 			root->left = 0;
 			root->right = 0;
@@ -698,18 +703,15 @@ namespace DataStructures
 			// start at the root
 			current = root;
 
-#ifdef _MSC_VER
-#pragma warning( disable : 4127 ) // warning C4127: conditional expression is constant
-#endif
-			while ( true )    // This loop traverses the tree to find a spot for insertion
+			for(;;)    // This loop traverses the tree to find a spot for insertion
 			{
 			
 				if ( input < *( current->item ) )
 				{
 					if ( current->left == 0 )
 					{
-						current->left = RakNet::OP_NEW<typename BinarySearchTree::node>( file, line );
-						current->left->item = RakNet::OP_NEW<BinarySearchTreeType>( file, line );
+						current->left = SLNet::OP_NEW<typename BinarySearchTree::node>( file, line );
+						current->left->item = SLNet::OP_NEW<BinarySearchTreeType>( file, line );
 						current = current->left;
 						current->left = 0;
 						current->right = 0;
@@ -730,8 +732,8 @@ namespace DataStructures
 					{
 						if ( current->right == 0 )
 						{
-							current->right = RakNet::OP_NEW<typename BinarySearchTree::node>( file, line );
-							current->right->item = RakNet::OP_NEW<BinarySearchTreeType>( file, line );
+							current->right = SLNet::OP_NEW<typename BinarySearchTree::node>( file, line );
+							current->right->item = SLNet::OP_NEW<BinarySearchTreeType>( file, line );
 							current = current->right;
 							current->left = 0;
 							current->right = 0;
@@ -1084,8 +1086,8 @@ namespace DataStructures
 		{
 			if ( BinarySearchTree_size == 1 )
 			{
-				RakNet::OP_DELETE(root->item, file, line);
-				RakNet::OP_DELETE(root, file, line);
+				SLNet::OP_DELETE(root->item, file, line);
+				SLNet::OP_DELETE(root, file, line);
 				root = 0;
 				BinarySearchTree_size = 0;
 			}
@@ -1113,9 +1115,9 @@ namespace DataStructures
 						else
 							parent->right = 0;
 							
-						RakNet::OP_DELETE(current->item, file, line);
+						SLNet::OP_DELETE(current->item, file, line);
 						
-						RakNet::OP_DELETE(current, file, line);
+						SLNet::OP_DELETE(current, file, line);
 						
 						current = parent;
 						
@@ -1127,8 +1129,4 @@ namespace DataStructures
 	
 } // End namespace
 
-#endif
-
-#ifdef _MSC_VER
-#pragma warning( pop )
 #endif

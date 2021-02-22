@@ -1,8 +1,21 @@
+/*
+ *  Original work: Copyright (c) 2014, Oculus VR, Inc.
+ *  All rights reserved.
+ *
+ *  This source code is licensed under the BSD-style license found in the
+ *  RakNet License.txt file in the licenses directory of this source tree. An additional grant 
+ *  of patent rights can be found in the RakNet Patents.txt file in the same directory.
+ *
+ *
+ *  Modified work: Copyright (c) 2016-2017, SLikeSoft UG (haftungsbeschränkt)
+ *
+ *  This source code was modified by SLikeSoft. Modifications are licensed under the MIT-style
+ *  license found in the license.txt file in the root directory of this source tree.
+ */
+
 /// \file DS_MemoryPool.h
 ///
-/// This file is part of RakNet Copyright 2003 Jenkins Software LLC
-///
-/// Usage of RakNet is subject to the appropriate license agreement.
+
 
 #ifndef __MEMORY_POOL_H
 #define __MEMORY_POOL_H
@@ -11,10 +24,10 @@
 // Use stdlib and not malloc for compatibility
 #include <stdlib.h>
 #endif
-#include "RakAssert.h"
+#include "assert.h"
 #include "Export.h"
 
-#include "RakMemoryOverride.h"
+#include "memoryoverride.h"
 
 // DS_MEMORY_POOL_MAX_FREE_PAGES must be > 1
 #define DS_MEMORY_POOL_MAX_FREE_PAGES 4
@@ -35,7 +48,6 @@ namespace DataStructures
 			MemoryBlockType userMemory;
 			Page *parentPage;
 		};
-
 		struct Page
 		{
 			MemoryWithPage** availableStack;
@@ -216,10 +228,7 @@ namespace DataStructures
 		if (availablePagesSize>0)
 		{
 			cur = availablePages;
-#ifdef _MSC_VER
-#pragma warning(disable:4127)   // conditional expression is constant
-#endif
-			while (true) 
+			for (;;)
 			// do
 			{
 				rakFree_Ex(cur->availableStack, file, line );
@@ -238,7 +247,7 @@ namespace DataStructures
 		if (unavailablePagesSize>0)
 		{
 			cur = unavailablePages;
-			while (1)
+			for(;;)
 			//do 
 			{
 				rakFree_Ex(cur->availableStack, file, line );
@@ -293,3 +302,57 @@ namespace DataStructures
 }
 
 #endif
+
+/*
+#include "DS_MemoryPool.h"
+#include "DS_List.h"
+
+struct TestMemoryPool
+{
+	int allocationId;
+};
+
+int main(void)
+{
+	DataStructures::MemoryPool<TestMemoryPool> memoryPool;
+	DataStructures::List<TestMemoryPool*> returnList;
+
+	for (int i=0; i < 100000; i++)
+		returnList.Push(memoryPool.Allocate(_FILE_AND_LINE_), _FILE_AND_LINE_);
+	for (int i=0; i < returnList.Size(); i+=2)
+	{
+		memoryPool.Release(returnList[i], _FILE_AND_LINE_);
+		returnList.RemoveAtIndexFast(i);
+	}
+	for (int i=0; i < 100000; i++)
+		returnList.Push(memoryPool.Allocate(_FILE_AND_LINE_), _FILE_AND_LINE_);
+	while (returnList.Size())
+	{
+		memoryPool.Release(returnList[returnList.Size()-1], _FILE_AND_LINE_);
+		returnList.RemoveAtIndex(returnList.Size()-1);
+	}
+	for (int i=0; i < 100000; i++)
+		returnList.Push(memoryPool.Allocate(_FILE_AND_LINE_), _FILE_AND_LINE_);
+	while (returnList.Size())
+	{
+		memoryPool.Release(returnList[returnList.Size()-1], _FILE_AND_LINE_);
+		returnList.RemoveAtIndex(returnList.Size()-1);
+	}
+	for (int i=0; i < 100000; i++)
+		returnList.Push(memoryPool.Allocate(_FILE_AND_LINE_), _FILE_AND_LINE_);
+	for (int i=100000-1; i <= 0; i-=2)
+	{
+		memoryPool.Release(returnList[i], _FILE_AND_LINE_);
+		returnList.RemoveAtIndexFast(i);
+	}
+	for (int i=0; i < 100000; i++)
+		returnList.Push(memoryPool.Allocate(_FILE_AND_LINE_), _FILE_AND_LINE_);
+	while (returnList.Size())
+	{
+		memoryPool.Release(returnList[returnList.Size()-1], _FILE_AND_LINE_);
+		returnList.RemoveAtIndex(returnList.Size()-1);
+	}
+
+	return 0;
+}
+*/

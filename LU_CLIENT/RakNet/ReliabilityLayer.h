@@ -1,24 +1,27 @@
+/*
+ *  Original work: Copyright (c) 2014, Oculus VR, Inc.
+ *  All rights reserved.
+ *
+ *  This source code is licensed under the BSD-style license found in the
+ *  RakNet License.txt file in the licenses directory of this source tree. An additional grant 
+ *  of patent rights can be found in the RakNet Patents.txt file in the same directory.
+ *
+ *
+ *  Modified work: Copyright (c) 2016-2017, SLikeSoft UG (haftungsbeschränkt)
+ *
+ *  This source code was modified by SLikeSoft. Modifications are licensed under the MIT-style
+ *  license found in the license.txt file in the root directory of this source tree.
+ */
+
 /// \file
 /// \brief \b [Internal] Datagram reliable, ordered, unordered and sequenced sends.  Flow control.  Message splitting, reassembly, and coalescence.
 ///
-/// This file is part of RakNet Copyright 2003 Jenkins Software LLC
-///
-/// Usage of RakNet is subject to the appropriate license agreement.
-/// Creative Commons Licensees are subject to the
-/// license found at
-/// http://creativecommons.org/licenses/by-nc/2.5/
-/// Single application licensees are subject to the license found at
-/// http://www.jenkinssoftware.com/SingleApplicationLicense.html
-/// Custom license users are subject to the terms therein.
-/// GPL license users are subject to the GNU General Public
-/// License as published by the Free
-/// Software Foundation; either version 2 of the License, or (at your
-/// option) any later version.
+
 
 #ifndef __RELIABILITY_LAYER_H
 #define __RELIABILITY_LAYER_H
 
-#include "RakMemoryOverride.h"
+#include "memoryoverride.h"
 #include "MTUSize.h"
 #include "DS_LinkedList.h"
 #include "DS_List.h"
@@ -27,21 +30,27 @@
 #include "DS_Queue.h"
 #include "BitStream.h"
 #include "InternalPacket.h"
-#include "RakNetStatistics.h"
-#include "SHA1.h"
+#include "statistics.h"
+#include "DR_SHA1.h"
 #include "DS_OrderedList.h"
 #include "DS_RangeList.h"
 #include "DS_BPlusTree.h"
 #include "DS_MemoryPool.h"
-#include "CCRakNetUDT.h"
-#include "DS_Multilist.h"
-#include "RakNetDefines.h"
+#include "defines.h"
 #include "DS_Heap.h"
 #include "BitStream.h"
 #include "NativeFeatureIncludes.h"
+#include "SecureHandshake.h"
+#include "PluginInterface2.h"
+#include "Rand.h"
+#include "socket2.h"
 
-#if LIBCAT_SECURITY==1
-#include <cat/AllTunnel.hpp>
+#if USE_SLIDING_WINDOW_CONGESTION_CONTROL!=1
+#include "CCRakNetUDT.h"
+#define INCLUDE_TIMESTAMP_WITH_DATAGRAMS 1
+#else
+#include "CCRakNetSlidingWindow.h"
+#define INCLUDE_TIMESTAMP_WITH_DATAGRAMS 0
 #endif
 
 /// Number of ordered streams available. You can use up to 32 ordered streams
@@ -49,7 +58,7 @@
 
 #define RESEND_TREE_ORDER 32
 
-namespace RakNet {
+namespace SLNet {
 
 	/// Forward declarations
 class PluginInterface2;
@@ -61,11 +70,18 @@ struct SplitPacketChannel//<SplitPacketChannel>
 {
 	CCTimeType lastUpdateTime;
 
+	DataStructures::List<InternalPacket*> splitPacketList;
+
+#if PREALLOCATE_LARGE_MESSAGES==1
+	InternalPacket *returnedPacket;
+	bool gotFirstPacket;
+	unsigned int stride;
+	unsigned int splitPacketsArrived;
+#else
 	// This is here for progress notifications, since progress notifications return the first packet data, if available
 	InternalPacket *firstPacket;
+#endif
 
-	// DataStructures::OrderedList<SplitPacketIndexType, InternalPacket*, SplitPacketIndexComp> splitPacketList;
-	DataStructures::List<InternalPacket*> splitPacketList;
 };
 int RAK_DLL_EXPORT SplitPacketChannelComp( SplitPacketIdType const &key, SplitPacketChannel* const &data );
 
@@ -75,10 +91,10 @@ struct BPSTracker
 	BPSTracker();
 	~BPSTracker();
 	void Reset(const char *file, unsigned int line);
-	void Push1(CCTimeType time, uint64_t value1);
-//	void Push2(RakNet::TimeUS time, uint64_t value1, uint64_t value2);
-	uint64_t GetBPS1(CCTimeType time);
-	uint64_t GetBPS1Threadsafe(CCTimeType time);
+	inline void Push1(CCTimeType time, uint64_t value1) {dataQueue.Push(TimeAndValue2(time,value1),_FILE_AND_LINE_); total1+=value1; lastSec1+=value1;}
+//	void Push2(SLNet::TimeUS time, uint64_t value1, uint64_t value2);
+	inline uint64_t GetBPS1(CCTimeType time) {(void) time; return lastSec1;}
+	inline uint64_t GetBPS1Threadsafe(CCTimeType time) {(void) time; return lastSec1;}
 //	uint64_t GetBPS2(RakNetTimeUS time);
 //	void GetBPS1And2(RakNetTimeUS time, uint64_t &out1, uint64_t &out2);
 	uint64_t GetTotal1(void) const;
@@ -89,7 +105,7 @@ struct BPSTracker
 		TimeAndValue2();
 		~TimeAndValue2();
 		TimeAndValue2(CCTimeType t, uint64_t v1);
-	//	TimeAndValue2(RakNet::TimeUS t, uint64_t v1, uint64_t v2);
+	//	TimeAndValue2(SLNet::TimeUS t, uint64_t v1, uint64_t v2);
 	//	uint64_t value1, value2;
 		uint64_t value1;
 		CCTimeType time;
@@ -99,7 +115,7 @@ struct BPSTracker
 //	uint64_t total2, lastSec2;
 	DataStructures::Queue<TimeAndValue2> dataQueue;
 	void ClearExpired1(CCTimeType time);
-//	void ClearExpired2(RakNet::TimeUS time);
+//	void ClearExpired2(SLNet::TimeUS time);
 };
 
 /// Datagram reliable, ordered, unordered and sequenced sends.  Flow control.  Message splitting, reassembly, and coalescence.
@@ -119,11 +135,11 @@ public:
 	/// Set the time, in MS, to use before considering ourselves disconnected after not being able to deliver a reliable packet
 	/// Default time is 10,000 or 10 seconds in release and 30,000 or 30 seconds in debug.
 	/// \param[in] time Time, in MS
-	void SetTimeoutTime( RakNet::TimeMS time );
+	void SetTimeoutTime(SLNet::TimeMS time );
 
 	/// Returns the value passed to SetTimeoutTime. or the default if it was never called
 	/// \param[out] the value passed to SetTimeoutTime
-	RakNet::TimeMS GetTimeoutTime(void);
+	SLNet::TimeMS GetTimeoutTime(void);
 
 	/// Packets are read directly from the socket layer and skip the reliability layer because unconnected players do not use the reliability layer
 	/// This function takes packet data after a player has been confirmed as connected.
@@ -135,8 +151,8 @@ public:
 	/// \retval true Success
 	/// \retval false Modified packet
 	bool HandleSocketReceiveFromConnectedPlayer(
-		const char *buffer, unsigned int length, SystemAddress systemAddress, DataStructures::List<PluginInterface2*> &messageHandlerList, int MTUSize,
-		SOCKET s, RakNetRandom *rnr, unsigned short remotePortRakNetWasStartedOn_PS3, CCTimeType timeRead);
+		const char *buffer, unsigned int length, SystemAddress &systemAddress, DataStructures::List<PluginInterface2*> &messageHandlerList, int MTUSize,
+		RakNetSocket2 *s, RakNetRandom *rnr, CCTimeType timeRead, BitStream &updateBitStream);
 
 	/// This allocates bytes and writes a user-level message to those bytes.
 	/// \param[out] data The message
@@ -151,7 +167,7 @@ public:
 	/// \param[in] orderingChannel 0 to 31.  Specifies what channel to use, for relational ordering and sequencing of packets.
 	/// \param[in] makeDataCopy If true \a data will be copied.  Otherwise, only a pointer will be stored.
 	/// \param[in] MTUSize maximum datagram size
-	/// \param[in] currentTime Current time, as per RakNet::GetTimeMS()
+	/// \param[in] currentTime Current time, as per SLNet::GetTimeMS()
 	/// \param[in] receipt This number will be returned back with ID_SND_RECEIPT_ACKED or ID_SND_RECEIPT_LOSS and is only returned with the reliability types that contain RECEIPT in the name
 	/// \return True or false for success or failure.
 	bool Send( char *data, BitSize_t numberOfBitsToSend, PacketPriority priority, PacketReliability reliability, unsigned char orderingChannel, bool makeDataCopy, int MTUSize, CCTimeType currentTime, uint32_t receipt );
@@ -163,16 +179,11 @@ public:
 	/// \param[in] time current system time
 	/// \param[in] maxBitsPerSecond if non-zero, enforces that outgoing bandwidth does not exceed this amount
 	/// \param[in] messageHandlerList A list of registered plugins
-	void Update( SOCKET s, SystemAddress systemAddress, int MTUSize, CCTimeType time,
+	void Update( RakNetSocket2 *s, SystemAddress &systemAddress, int MTUSize, CCTimeType time,
 		unsigned bitsPerSecondLimit,
 		DataStructures::List<PluginInterface2*> &messageHandlerList,
-		RakNetRandom *rnr, unsigned short remotePortRakNetWasStartedOn_PS3);
+		RakNetRandom *rnr, BitStream &updateBitStream);
 	
-
-	/// If Read returns -1 and this returns true then a modified packetwas detected
-	/// \return true when a modified packet is detected
-	bool IsCheater( void ) const;
-
 	/// Were you ever unable to deliver a packet despite retries?
 	/// \return true means the connection has been lost.  Otherwise not.
 	bool IsDeadConnection( void ) const;
@@ -182,51 +193,53 @@ public:
 
 	/// Get Statistics
 	/// \return A pointer to a static struct, filled out with current statistical information.
-	RakNetStatistics * const GetStatistics( RakNetStatistics *rns );
+	RakNetStatistics * GetStatistics( RakNetStatistics *rns );
 
 	///Are we waiting for any data to be sent out or be processed by the player?
 	bool IsOutgoingDataWaiting(void);
 	bool AreAcksWaiting(void);
 
 	// Set outgoing lag and packet loss properties
-	void ApplyNetworkSimulator( double _maxSendBPS, RakNet::TimeMS _minExtraPing, RakNet::TimeMS _extraPingVariance );
+	void ApplyNetworkSimulator( double _maxSendBPS, SLNet::TimeMS _minExtraPing, SLNet::TimeMS _extraPingVariance );
 
 	/// Returns if you previously called ApplyNetworkSimulator
 	/// \return If you previously called ApplyNetworkSimulator
 	bool IsNetworkSimulatorActive( void );
 
 	void SetSplitMessageProgressInterval(int interval);
-	void SetUnreliableTimeout(RakNet::TimeMS timeoutMS);
+	void SetUnreliableTimeout(SLNet::TimeMS timeoutMS);
 	/// Has a lot of time passed since the last ack
-	bool AckTimeout(RakNet::TimeMS curTime);
+	bool AckTimeout(SLNet::Time curTime);
 	CCTimeType GetNextSendTime(void) const;
 	CCTimeType GetTimeBetweenPackets(void) const;
+#if INCLUDE_TIMESTAMP_WITH_DATAGRAMS==1
 	CCTimeType GetAckPing(void) const;
-	RakNet::TimeMS GetTimeLastDatagramArrived(void) const {return timeLastDatagramArrived;}
+#endif
+	SLNet::TimeMS GetTimeLastDatagramArrived(void) const {return timeLastDatagramArrived;}
 
 	// If true, will update time between packets quickly based on ping calculations
 	//void SetDoFastThroughputReactions(bool fast);
 
 	// Encoded as numMessages[unsigned int], message1BitLength[unsigned int], message1Data (aligned), ...
-	//void GetUndeliveredMessages(RakNet::BitStream *messages, int MTUSize);
+	//void GetUndeliveredMessages(SLNet::BitStream *messages, int MTUSize);
 
 private:
 	/// Send the contents of a bitstream to the socket
 	/// \param[in] s The socket used for sending data
 	/// \param[in] systemAddress The address and port to send to
 	/// \param[in] bitStream The data to send.
-	void SendBitStream( SOCKET s, SystemAddress systemAddress, RakNet::BitStream *bitStream, RakNetRandom *rnr, unsigned short remotePortRakNetWasStartedOn_PS3, CCTimeType currentTime);
+	void SendBitStream( RakNetSocket2 *s, SystemAddress &systemAddress, SLNet::BitStream *bitStream, RakNetRandom *rnr, CCTimeType currentTime);
 
 	///Parse an internalPacket and create a bitstream to represent this data
 	/// \return Returns number of bits used
-	BitSize_t WriteToBitStreamFromInternalPacket( RakNet::BitStream *bitStream, const InternalPacket *const internalPacket, CCTimeType curTime );
+	BitSize_t WriteToBitStreamFromInternalPacket(SLNet::BitStream *bitStream, const InternalPacket *const internalPacket, CCTimeType curTime );
 
 
 	/// Parse a bitstream and create an internal packet to represent this data
-	InternalPacket* CreateInternalPacketFromBitStream( RakNet::BitStream *bitStream, CCTimeType time );
+	InternalPacket* CreateInternalPacketFromBitStream(SLNet::BitStream *bitStream, CCTimeType time );
 
 	/// Does what the function name says
-	unsigned RemovePacketFromResendListAndDeleteOlderReliableSequenced( const MessageNumberType messageNumber, CCTimeType time, DataStructures::List<PluginInterface2*> &messageHandlerList, SystemAddress systemAddress );
+	unsigned RemovePacketFromResendListAndDeleteOlderReliableSequenced( const MessageNumberType messageNumber, CCTimeType time, DataStructures::List<PluginInterface2*> &messageHandlerList, const SystemAddress &systemAddress );
 
 	/// Acknowledge receipt of the packet with the specified messageNumber
 	void SendAcknowledgementPacket( const DatagramSequenceNumberType messageNumber, CCTimeType time);
@@ -251,10 +264,10 @@ private:
 	bool CheckSHA1( char code[ SHA1_LENGTH ], unsigned char * const buffer, unsigned int nbytes );
 
 	/// Search the specified list for sequenced packets on the specified ordering channel, optionally skipping those with splitPacketId, and delete them
-	void DeleteSequencedPacketsInList( unsigned char orderingChannel, DataStructures::List<InternalPacket*>&theList, int splitPacketId = -1 );
+//	void DeleteSequencedPacketsInList( unsigned char orderingChannel, DataStructures::List<InternalPacket*>&theList, int splitPacketId = -1 );
 
 	/// Search the specified list for sequenced packets with a value less than orderingIndex and delete them
-	void DeleteSequencedPacketsInList( unsigned char orderingChannel, DataStructures::Queue<InternalPacket*>&theList );
+//	void DeleteSequencedPacketsInList( unsigned char orderingChannel, DataStructures::Queue<InternalPacket*>&theList );
 
 	/// Returns true if newPacketOrderingIndex is older than the waitingForPacketOrderingIndex
 	bool IsOlderOrderedPacket( OrderingIndexType newPacketOrderingIndex, OrderingIndexType waitingForPacketOrderingIndex );
@@ -266,8 +279,8 @@ private:
 	void InsertIntoSplitPacketList( InternalPacket * internalPacket, CCTimeType time );
 
 	/// Take all split chunks with the specified splitPacketId and try to reconstruct a packet. If we can, allocate and return it.  Otherwise return 0
-	InternalPacket * BuildPacketFromSplitPacketList( SplitPacketIdType splitPacketId, CCTimeType time,
-		SOCKET s, SystemAddress systemAddress, RakNetRandom *rnr, unsigned short remotePortRakNetWasStartedOn_PS3);
+	InternalPacket * BuildPacketFromSplitPacketList( SplitPacketIdType inSplitPacketId, CCTimeType time,
+		RakNetSocket2 *s, SystemAddress &systemAddress, RakNetRandom *rnr, BitStream &updateBitStream);
 	InternalPacket * BuildPacketFromSplitPacketList( SplitPacketChannel *splitPacketChannel, CCTimeType time );
 
 	/// Delete any unreliable split packets that have long since expired
@@ -278,10 +291,10 @@ private:
 	InternalPacket * CreateInternalPacketCopy( InternalPacket *original, int dataByteOffset, int dataByteLength, CCTimeType time );
 
 	/// Get the specified ordering list
-	DataStructures::LinkedList<InternalPacket*> *GetOrderingListAtOrderingStream( unsigned char orderingChannel );
+	// DataStructures::LinkedList<InternalPacket*> *GetOrderingListAtOrderingStream( unsigned char orderingChannel );
 
 	/// Add the internal packet to the ordering list in order based on order index
-	void AddToOrderingList( InternalPacket * internalPacket );
+	// void AddToOrderingList( InternalPacket * internalPacket );
 
 	/// Inserts a packet into the resend list in order
 	void InsertPacketIntoResendList( InternalPacket *internalPacket, CCTimeType time, bool firstResend, bool modifyUnacknowledgedBytes );
@@ -303,7 +316,7 @@ private:
 
 
 	/// Does this packet number represent a packet that was skipped (out of order?)
-	//unsigned int IsReceivedPacketHole(unsigned int input, RakNet::TimeMS currentTime) const;
+	//unsigned int IsReceivedPacketHole(unsigned int input, SLNet::TimeMS currentTime) const;
 
 	/// Skip an element in the received packets list
 	//unsigned int MakeReceivedPacketHole(unsigned int input) const;
@@ -318,7 +331,7 @@ private:
 
 	// Used ONLY for RELIABLE_ORDERED
 	// RELIABLE_SEQUENCED just returns the newest one
-	DataStructures::List<DataStructures::LinkedList<InternalPacket*>*> orderingList;
+	// DataStructures::List<DataStructures::LinkedList<InternalPacket*>*> orderingList;
 	DataStructures::Queue<InternalPacket*> outputQueue;
 	int splitMessageProgressInterval;
 	CCTimeType unreliableTimeout;
@@ -331,20 +344,35 @@ private:
 	struct DatagramHistoryNode
 	{
 		DatagramHistoryNode() {}
-		DatagramHistoryNode(MessageNumberNode *_head) :
-		head(_head) {}
+		DatagramHistoryNode(MessageNumberNode *_head, CCTimeType ts
+			) :
+		head(_head), timeSent(ts)
+		{}
 		MessageNumberNode *head;
+		CCTimeType timeSent;
 	};
 	// Queue length is programmatically restricted to DATAGRAM_MESSAGE_ID_ARRAY_LENGTH
 	// This is essentially an O(1) lookup to get a DatagramHistoryNode given an index
+	// datagramHistory holds a linked list of MessageNumberNode. Each MessageNumberNode refers to one element in resendList which can be cleared on an ack.
 	DataStructures::Queue<DatagramHistoryNode> datagramHistory;
 	DataStructures::MemoryPool<MessageNumberNode> datagramHistoryMessagePool;
 
+	struct UnreliableWithAckReceiptNode
+	{
+		UnreliableWithAckReceiptNode() {}
+		UnreliableWithAckReceiptNode(DatagramSequenceNumberType _datagramNumber, uint32_t _sendReceiptSerial, SLNet::TimeUS _nextActionTime) :
+			datagramNumber(_datagramNumber), sendReceiptSerial(_sendReceiptSerial), nextActionTime(_nextActionTime)
+		{}
+		DatagramSequenceNumberType datagramNumber;
+		uint32_t sendReceiptSerial;
+		SLNet::TimeUS nextActionTime;
+	};
+	DataStructures::List<UnreliableWithAckReceiptNode> unreliableWithAckReceiptHistory;
 
 	void RemoveFromDatagramHistory(DatagramSequenceNumberType index);
-	MessageNumberNode* GetMessageNumberNodeByDatagramIndex(DatagramSequenceNumberType index);
-	void AddFirstToDatagramHistory(DatagramSequenceNumberType datagramNumber);
-	MessageNumberNode* AddFirstToDatagramHistory(DatagramSequenceNumberType datagramNumber, DatagramSequenceNumberType messageNumber);
+	MessageNumberNode* GetMessageNumberNodeByDatagramIndex(DatagramSequenceNumberType index, CCTimeType *timeSent);
+	void AddFirstToDatagramHistory(DatagramSequenceNumberType datagramNumber, CCTimeType timeSent);
+	MessageNumberNode* AddFirstToDatagramHistory(DatagramSequenceNumberType datagramNumber, DatagramSequenceNumberType messageNumber, CCTimeType timeSent);
 	MessageNumberNode* AddSubsequentToDatagramHistory(MessageNumberNode *messageNumberNode, DatagramSequenceNumberType messageNumber);
 	DatagramSequenceNumberType datagramHistoryPopCount;
 	
@@ -365,7 +393,7 @@ private:
 	// Set to the current time if it is not zero, and we get incoming data
 	// If the current time - timeResendQueueNonEmpty is greater than a threshold, we are disconnected
 //	CCTimeType timeResendQueueNonEmpty;
-	RakNet::TimeMS timeLastDatagramArrived;
+	SLNet::TimeMS timeLastDatagramArrived;
 
 
 	// If we backoff due to packetloss, don't remeasure until all waiting resends have gone out or else we overcount
@@ -388,19 +416,49 @@ private:
 	MessageNumberType sendReliableMessageNumberIndex;
 	MessageNumberType internalOrderIndex;
 	//unsigned int windowSize;
-	RakNet::BitStream updateBitStream;
-	OrderingIndexType waitingForOrderedPacketWriteIndex[ NUMBER_OF_ORDERED_STREAMS ], waitingForSequencedPacketWriteIndex[ NUMBER_OF_ORDERED_STREAMS ];
-	
-	// STUFF TO NOT MUTEX HERE (called from non-conflicting threads, or value is not important)
-	OrderingIndexType waitingForOrderedPacketReadIndex[ NUMBER_OF_ORDERED_STREAMS ], waitingForSequencedPacketReadIndex[ NUMBER_OF_ORDERED_STREAMS ];
+	//SLNet::BitStream updateBitStream;
 	bool deadConnection, cheater;
-	// unsigned int lastPacketSendTime,retransmittedFrames, sentPackets, sentFrames, receivedPacketsCount, bytesSent, bytesReceived,lastPacketReceivedTime;
 	SplitPacketIdType splitPacketId;
-	RakNet::TimeMS timeoutTime; // How long to wait in MS before timing someone out
+	SLNet::TimeMS timeoutTime; // How long to wait in MS before timing someone out
 	//int MAX_AVERAGE_PACKETS_PER_SECOND; // Name says it all
 //	int RECEIVED_PACKET_LOG_LENGTH, requestedReceivedPacketLogLength; // How big the receivedPackets array is
 //	unsigned int *receivedPackets;
 	RakNetStatistics statistics;
+
+	// Algorithm for blending ordered and sequenced on the same channel:
+	// 1. Each ordered message transmits OrderingIndexType orderedWriteIndex. There are NUMBER_OF_ORDERED_STREAMS independent values of these. The value
+	//    starts at 0. Every time an ordered message is sent, the value increments by 1
+	// 2. Each sequenced message contains the current value of orderedWriteIndex for that channel, and additionally OrderingIndexType sequencedWriteIndex. 
+	//    sequencedWriteIndex resets to 0 every time orderedWriteIndex increments. It increments by 1 every time a sequenced message is sent.
+	// 3. The receiver maintains the next expected value for the orderedWriteIndex, stored in orderedReadIndex.
+	// 4. As messages arrive:
+	//    If a message has the current ordering index, and is sequenced, and is < the current highest sequence value, discard
+	//    If a message has the current ordering index, and is sequenced, and is >= the current highest sequence value, return immediately
+	//    If a message has a greater ordering index, and is sequenced or ordered, buffer it
+	//    If a message has the current ordering index, and is ordered, buffer, then push off messages from buffer
+	// 5. Pushing off messages from buffer:
+	//    Messages in buffer are put in a minheap. The value of each node is calculated such that messages are returned:
+	//    A. (lowest ordering index, lowest sequence index)
+	//    B. (lowest ordering index, no sequence index)
+	//    Messages are pushed off until the heap is empty, or the next message to be returned does not preserve the ordered index
+	//    For an empty heap, the heap weight should start at the lowest value based on the next expected ordering index, to avoid variable overflow
+
+	// Sender increments this by 1 for every ordered message sent
+	OrderingIndexType orderedWriteIndex[NUMBER_OF_ORDERED_STREAMS];
+	// Sender increments by 1 for every sequenced message sent. Resets to 0 when an ordered message is sent
+	OrderingIndexType sequencedWriteIndex[NUMBER_OF_ORDERED_STREAMS];
+	// Next expected index for ordered messages.
+	OrderingIndexType orderedReadIndex[NUMBER_OF_ORDERED_STREAMS];
+	// Highest value received for sequencedWriteIndex for the current value of orderedReadIndex on the same channel.
+	OrderingIndexType highestSequencedReadIndex[NUMBER_OF_ORDERED_STREAMS];
+	DataStructures::Heap<reliabilityHeapWeightType, InternalPacket*, false> orderingHeaps[NUMBER_OF_ORDERED_STREAMS];
+	OrderingIndexType heapIndexOffsets[NUMBER_OF_ORDERED_STREAMS];
+
+	
+
+
+
+
 
 //	CCTimeType histogramStart;
 //	unsigned histogramBitsSent;
@@ -420,7 +478,10 @@ private:
 	bool resetReceivedPackets;
 
 	CCTimeType lastUpdateTime;
-	CCTimeType timeBetweenPackets, nextSendTime, ackPing;
+	CCTimeType timeBetweenPackets, nextSendTime;
+#if INCLUDE_TIMESTAMP_WITH_DATAGRAMS==1
+	CCTimeType ackPing;
+#endif
 //	CCTimeType ackPingSamples[ACK_PING_SAMPLES_SIZE]; // Must be range of unsigned char to wrap ackPingIndex properly
 	CCTimeType ackPingSum;
 	unsigned char ackPingIndex;
@@ -439,30 +500,36 @@ private:
 
 	unsigned receivePacketCount;
 
-	//long double timeBetweenPacketsIncreaseMultiplier, timeBetweenPacketsDecreaseMultiplier;
-
 #ifdef _DEBUG
 	struct DataAndTime//<InternalPacket>
 	{
-		SOCKET s;
+		RakNetSocket2 *s;
 		char data[ MAXIMUM_MTU_SIZE ];
 		unsigned int length;
-		RakNet::TimeMS sendTime;
-	//	SystemAddress systemAddress;
+		SLNet::TimeMS sendTime;
+		//	SystemAddress systemAddress;
 		unsigned short remotePortRakNetWasStartedOn_PS3;
+		unsigned int extraSocketOptions;
 	};
 	DataStructures::Queue<DataAndTime*> delayList;
 
 	// Internet simulator
 	double packetloss;
-	RakNet::TimeMS minExtraPing, extraPingVariance;
+	SLNet::TimeMS minExtraPing, extraPingVariance;
 #endif
 
 	CCTimeType elapsedTimeSinceLastUpdate;
 
 	CCTimeType nextAckTimeToSend;
 
-	RakNet::CCRakNetUDT congestionManager;
+	
+#if USE_SLIDING_WINDOW_CONGESTION_CONTROL==1
+	SLNet::CCRakNetSlidingWindow congestionManager;
+#else
+	SLNet::CCRakNetUDT congestionManager;
+#endif
+
+
 	uint32_t unacknowledgedBytes;
 	
 	bool ResendBufferOverflow(void) const;
@@ -471,14 +538,14 @@ private:
 	void PushPacket(CCTimeType time, InternalPacket *internalPacket, bool isReliable);
 	void PushDatagram(void);
 	bool TagMostRecentPushAsSecondOfPacketPair(void);
-	void ClearPacketsAndDatagrams(bool releaseToInternalPacketPoolIfNeedsAck);
+	void ClearPacketsAndDatagrams(void);
 	void MoveToListHead(InternalPacket *internalPacket);
 	void RemoveFromList(InternalPacket *internalPacket, bool modifyUnacknowledgedBytes);
 	void AddToListTail(InternalPacket *internalPacket, bool modifyUnacknowledgedBytes);
 	void PopListHead(bool modifyUnacknowledgedBytes);
 	bool IsResendQueueEmpty(void) const;
 	void SortSplitPacketList(DataStructures::List<InternalPacket*> &data, unsigned int leftEdge, unsigned int rightEdge) const;
-	void SendACKs(SOCKET s, SystemAddress systemAddress, CCTimeType time, RakNetRandom *rnr, unsigned short remotePortRakNetWasStartedOn_PS3);
+	void SendACKs(RakNetSocket2 *s, SystemAddress &systemAddress, CCTimeType time, RakNetRandom *rnr, BitStream &updateBitStream);
 
 	DataStructures::List<InternalPacket*> packetsToSendThisUpdate;
 	DataStructures::List<bool> packetsToDeallocThisUpdate;
@@ -512,11 +579,12 @@ private:
 	// Set the data pointer to externallyAllocatedPtr, do not allocate
 	void AllocInternalPacketData(InternalPacket *internalPacket, unsigned char *externallyAllocatedPtr);
 	// Allocate new
-	void AllocInternalPacketData(InternalPacket *internalPacket, unsigned int numBytes, const char *file, unsigned int line);
+	void AllocInternalPacketData(InternalPacket *internalPacket, unsigned int numBytes, bool allowStack, const char *file, unsigned int line);
 	void FreeInternalPacketData(InternalPacket *internalPacket, const char *file, unsigned int line);
 	DataStructures::MemoryPool<InternalPacketRefCountedData> refCountedDataPool;
 
 	BPSTracker bpsMetrics[RNS_PER_SECOND_METRICS_COUNT];
+	CCTimeType lastBpsClear;
 
 #if LIBCAT_SECURITY==1
 public:
@@ -528,6 +596,6 @@ protected:
 #endif // LIBCAT_SECURITY
 };
 
-} // namespace RakNet
+} // namespace SLNet
 
 #endif

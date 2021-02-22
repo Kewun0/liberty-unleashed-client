@@ -1,21 +1,30 @@
+/*
+ *  Original work: Copyright (c) 2014, Oculus VR, Inc.
+ *  All rights reserved.
+ *
+ *  This source code is licensed under the BSD-style license found in the
+ *  RakNet License.txt file in the licenses directory of this source tree. An additional grant 
+ *  of patent rights can be found in the RakNet Patents.txt file in the same directory.
+ *
+ *
+ *  Modified work: Copyright (c) 2016-2018, SLikeSoft UG (haftungsbeschränkt)
+ *
+ *  This source code was modified by SLikeSoft. Modifications are licensed under the MIT-style
+ *  license found in the license.txt file in the root directory of this source tree.
+ */
+
 /// \file DS_Table.h
 ///
-/// This file is part of RakNet Copyright 2003 Jenkins Software LLC
-///
-/// Usage of RakNet is subject to the appropriate license agreement.
+
 
 #ifndef __TABLE_H
 #define __TABLE_H
 
-#ifdef _MSC_VER
-#pragma warning( push )
-#endif
-
 #include "DS_List.h"
 #include "DS_BPlusTree.h"
-#include "RakMemoryOverride.h"
+#include "memoryoverride.h"
 #include "Export.h"
-#include "RakString.h"
+#include "string.h"
 
 #define _TABLE_BPLUS_TREE_ORDER 16
 #define _TABLE_MAX_COLUMN_NAME_LENGTH 64
@@ -57,7 +66,7 @@ namespace DataStructures
 			Cell();
 			~Cell();
 			Cell(double numericValue, char *charValue, void *ptr, ColumnType type);
-			void SetByType(double numericValue, char *charValue, void *ptr, ColumnType type);
+			void SetByType(double numericValue, char *charValue, void *inPtr, ColumnType type);
 			void Clear(void);
 			
 			/// Numeric
@@ -80,11 +89,12 @@ namespace DataStructures
 
 			/// String
 			void Get(char *output);
+			void Get(char *output, size_t outputLength);
 
 			/// Binary
 			void Get(char *output, int *outputLength);
 
-			RakNet::RakString ToString(ColumnType columnType);
+			SLNet::RakString ToString(ColumnType columnType);
 
 			// assignment operator and copy constructor
 			Cell& operator = ( const Cell& input );
@@ -254,6 +264,7 @@ namespace DataStructures
 		/// Numeric, string, binary
 		void GetCellValueByIndex(unsigned rowIndex, unsigned columnIndex, int *output);
 		void GetCellValueByIndex(unsigned rowIndex, unsigned columnIndex, char *output);
+		void GetCellValueByIndex(unsigned rowIndex, unsigned columnIndex, char *output, size_t outputLength);
 		void GetCellValueByIndex(unsigned rowIndex, unsigned columnIndex, char *output, int *outputLength);
 
 		/// \brief Gets a row.  More efficient to do this and access Row::cells than to repeatedly call GetCell.
@@ -335,9 +346,5 @@ namespace DataStructures
 		DataStructures::List<ColumnDescriptor> columns;
 	};
 }
-
-#ifdef _MSC_VER
-#pragma warning( pop )
-#endif
 
 #endif

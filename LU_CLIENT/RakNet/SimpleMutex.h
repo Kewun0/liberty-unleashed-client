@@ -1,26 +1,41 @@
+/*
+ *  Original work: Copyright (c) 2014, Oculus VR, Inc.
+ *  All rights reserved.
+ *
+ *  This source code is licensed under the BSD-style license found in the
+ *  RakNet License.txt file in the licenses directory of this source tree. An additional grant 
+ *  of patent rights can be found in the RakNet Patents.txt file in the same directory.
+ *
+ *
+ *  Modified work: Copyright (c) 2017, SLikeSoft UG (haftungsbeschränkt)
+ *
+ *  This source code was modified by SLikeSoft. Modifications are licensed under the MIT-style
+ *  license found in the license.txt file in the root directory of this source tree.
+ */
+
 /// \file
 /// \brief \b [Internal] Encapsulates a mutex
 ///
-/// This file is part of RakNet Copyright 2003 Jenkins Software LLC
-///
-/// Usage of RakNet is subject to the appropriate license agreement.
+
 
 
 #ifndef __SIMPLE_MUTEX_H
 #define __SIMPLE_MUTEX_H
 
-#include "RakMemoryOverride.h"
-#if defined(_XBOX) || defined(X360)
-                            
-#elif defined(_WIN32)
+#include "memoryoverride.h"
+
+
+#if   defined(_WIN32)
 #include "WindowsIncludes.h"
+
+
 #else
 #include <pthread.h>
 #include <sys/types.h>
 #endif
 #include "Export.h"
 
-namespace RakNet
+namespace SLNet
 {
 
 /// \brief An easy to use mutex.
@@ -42,10 +57,19 @@ public:
 
 	// Unlocks the mutex.
 	void Unlock(void);
+
+
+
+
+
+
+
 private:
 	void Init(void);
 #ifdef _WIN32
 	CRITICAL_SECTION criticalSection; /// Docs say this is faster than a mutex for single process access
+
+
 #else
 	pthread_mutex_t hMutex;
 #endif
@@ -53,7 +77,7 @@ private:
 	//	bool isInitialized;
 };
 
-} // namespace RakNet
+} // namespace SLNet
 
 #endif
 

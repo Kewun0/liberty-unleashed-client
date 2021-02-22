@@ -1,19 +1,32 @@
+/*
+ *  Original work: Copyright (c) 2014, Oculus VR, Inc.
+ *  All rights reserved.
+ *
+ *  This source code is licensed under the BSD-style license found in the
+ *  RakNet License.txt file in the licenses directory of this source tree. An additional grant 
+ *  of patent rights can be found in the RakNet Patents.txt file in the same directory.
+ *
+ *
+ *  Modified work: Copyright (c) 2016-2017, SLikeSoft UG (haftungsbeschränkt)
+ *
+ *  This source code was modified by SLikeSoft. Modifications are licensed under the MIT-style
+ *  license found in the license.txt file in the root directory of this source tree.
+ */
+
 /// \file DS_Heap.h
 /// \internal
 /// \brief Heap (Also serves as a priority queue)
 ///
-/// This file is part of RakNet Copyright 2003 Jenkins Software LLC
-///
-/// Usage of RakNet is subject to the appropriate license agreement.
+
 
 
 #ifndef __RAKNET_HEAP_H
 #define __RAKNET_HEAP_H
 
-#include "RakMemoryOverride.h"
+#include "memoryoverride.h"
 #include "DS_List.h"
 #include "Export.h"
-#include "RakAssert.h"
+#include "assert.h"
 
 #ifdef _MSC_VER
 #pragma warning( push )
@@ -82,6 +95,9 @@ namespace DataStructures
 			{
 				for (parentIndex = Parent(currentIndex); parentIndex < currentIndex; parentIndex++)
 				{
+#ifdef _MSC_VER
+#pragma warning(disable:4127)   // conditional expression is constant
+#endif
 					if (isMaxHeap)
 					{
 						// Every child is less than its parent
@@ -170,7 +186,7 @@ namespace DataStructures
 #ifdef _MSC_VER
 #pragma warning( disable : 4127 ) // warning C4127: conditional expression is constant
 #endif
-		while (1)
+		for(;;)
 		{
 			leftChild=LeftChild(currentIndex);
 			rightChild=RightChild(currentIndex);
@@ -228,13 +244,13 @@ namespace DataStructures
 	}
 
 	template  <class weight_type, class data_type, bool isMaxHeap>
-	data_type Heap<weight_type, data_type, isMaxHeap>::Peek(const unsigned startingIndex) const
+	inline data_type Heap<weight_type, data_type, isMaxHeap>::Peek(const unsigned startingIndex) const
 	{
 		return heap[startingIndex].data;
 	}
 
 	template  <class weight_type, class data_type, bool isMaxHeap>
-	weight_type Heap<weight_type, data_type, isMaxHeap>::PeekWeight(const unsigned startingIndex) const
+	inline weight_type Heap<weight_type, data_type, isMaxHeap>::PeekWeight(const unsigned startingIndex) const
 	{
 		return heap[startingIndex].weight;
 	}
@@ -246,7 +262,7 @@ namespace DataStructures
 	}
 
 	template <class weight_type, class data_type, bool isMaxHeap>
-	data_type& Heap<weight_type, data_type, isMaxHeap>::operator[] ( const unsigned int position ) const
+	inline data_type& Heap<weight_type, data_type, isMaxHeap>::operator[] ( const unsigned int position ) const
 	{
 		return heap[position].data;
 	}
@@ -257,19 +273,19 @@ namespace DataStructures
 	}
 
 	template <class weight_type, class data_type, bool isMaxHeap>
-	unsigned Heap<weight_type, data_type, isMaxHeap>::LeftChild(const unsigned i) const
+	inline unsigned Heap<weight_type, data_type, isMaxHeap>::LeftChild(const unsigned i) const
 	{
 		return i*2+1;
 	}
 
 	template <class weight_type, class data_type, bool isMaxHeap>
-	unsigned Heap<weight_type, data_type, isMaxHeap>::RightChild(const unsigned i) const
+	inline unsigned Heap<weight_type, data_type, isMaxHeap>::RightChild(const unsigned i) const
 	{
 		return i*2+2;
 	}
 
 	template <class weight_type, class data_type, bool isMaxHeap>
-	unsigned Heap<weight_type, data_type, isMaxHeap>::Parent(const unsigned i) const
+	inline unsigned Heap<weight_type, data_type, isMaxHeap>::Parent(const unsigned i) const
 	{
 #ifdef _DEBUG
 		RakAssert(i!=0);

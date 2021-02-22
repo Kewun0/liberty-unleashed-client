@@ -50,6 +50,13 @@
 #include "imgui/imgui.h"
 #include "imgui/directx8/imgui_impl_win32.h"
 #include "imgui_impl_rw.h"
+#include "raknet/MessageIdentifiers.h"
+#include "raknet/peerinterface.h"
+#include "raknet/statistics.h"
+#include "raknet/types.h"
+#include "raknet/BitStream.h"
+#include "raknet/sleep.h"
+#include "raknet/PacketLogger.h"
 
 #include <stdio.h>
 #include <thread>
@@ -72,6 +79,7 @@
 #pragma comment(lib,"enet.lib")
 #pragma comment(lib,"ws2_32.lib")
 #pragma comment(lib,"winmm.lib") 
+#pragma comment(lib,"slikenet.lib")
 
 extern unsigned char SCMData;
 
@@ -1295,6 +1303,110 @@ __declspec(naked) void CreatePlayer()
     }
 }
 
+unsigned char GetPacketIdentifier(SLNet::Packet* p)
+{
+    if (p == 0)
+        return 255;
+
+    if ((unsigned char)p->data[0] == ID_TIMESTAMP)
+    {
+        RakAssert(p->length > sizeof(SLNet::MessageID) + sizeof(SLNet::Time));
+        return (unsigned char)p->data[sizeof(SLNet::MessageID) + sizeof(SLNet::Time)];
+    }
+    else
+        return (unsigned char)p->data[0];
+}
+
+DWORD WINAPI LUThread2(HMODULE hMod)
+{
+    SLNet::RakNetStatistics* rss;
+    SLNet::RakPeerInterface* client = SLNet::RakPeerInterface::GetInstance();
+    SLNet::Packet* p;
+
+    unsigned char packetIdentifier;
+
+    SLNet::SystemAddress clientID = SLNet::UNASSIGNED_SYSTEM_ADDRESS;
+    client->AllowConnectionResponseIPMigration(false);
+
+    SLNet::SocketDescriptor socketDescriptor(static_cast<unsigned short>(1234), 0);
+    socketDescriptor.socketFamily = AF_INET;
+    client->Startup(8, &socketDescriptor, 1);
+    client->SetOccasionalPing(true);
+
+    SLNet::ConnectionAttemptResult car = client->Connect(ip, static_cast<unsigned short>(atoi(port)),0,0);
+    RakAssert(car == SLNet::CONNECTION_ATTEMPT_STARTED);
+    for (;;)
+    {
+        Sleep(30);
+        for (p = client->Receive(); p; client->DeallocatePacket(p), p = client->Receive())
+        {
+            // We got a packet, get the identifier with our handy function
+            packetIdentifier = GetPacketIdentifier(p);
+
+            // Check if this is a network message packet
+            switch (packetIdentifier)
+            {
+            case ID_DISCONNECTION_NOTIFICATION:
+                // Connection lost normally
+                printf("ID_DISCONNECTION_NOTIFICATION\n");
+                break;
+            case ID_ALREADY_CONNECTED:
+                // Connection lost normally
+                printf("ID_ALREADY_CONNECTED with guid %" PRINTF_64_BIT_MODIFIER "u\n", p->guid.g);
+                break;
+            case ID_INCOMPATIBLE_PROTOCOL_VERSION:
+                printf("ID_INCOMPATIBLE_PROTOCOL_VERSION\n");
+                break;
+            case ID_REMOTE_DISCONNECTION_NOTIFICATION: // Server telling the clients of another client disconnecting gracefully.  You can manually broadcast this in a peer to peer enviroment if you want.
+                printf("ID_REMOTE_DISCONNECTION_NOTIFICATION\n");
+                break;
+            case ID_REMOTE_CONNECTION_LOST: // Server telling the clients of another client disconnecting forcefully.  You can manually broadcast this in a peer to peer enviroment if you want.
+                printf("ID_REMOTE_CONNECTION_LOST\n");
+                break;
+            case ID_REMOTE_NEW_INCOMING_CONNECTION: // Server telling the clients of another client connecting.  You can manually broadcast this in a peer to peer enviroment if you want.
+                printf("ID_REMOTE_NEW_INCOMING_CONNECTION\n");
+                break;
+            case ID_CONNECTION_BANNED: // Banned from this server
+                printf("We are banned from this server.\n");
+                break;
+            case ID_CONNECTION_ATTEMPT_FAILED:
+                printf("Connection attempt failed\n");
+                break;
+            case ID_NO_FREE_INCOMING_CONNECTIONS:
+                // Sorry, the server is full.  I don't do anything here but
+                // A real app should tell the user
+                printf("ID_NO_FREE_INCOMING_CONNECTIONS\n");
+                break;
+
+            case ID_INVALID_PASSWORD:
+                printf("ID_INVALID_PASSWORD\n");
+                break;
+
+            case ID_CONNECTION_LOST:
+                // Couldn't deliver a reliable packet - i.e. the other system was abnormally
+                // terminated
+                printf("ID_CONNECTION_LOST\n");
+                break;
+
+            case ID_CONNECTION_REQUEST_ACCEPTED:
+                // This tells the client they have connected
+                printf("ID_CONNECTION_REQUEST_ACCEPTED to %s with GUID %s\n", p->systemAddress.ToString(true), p->guid.ToString());
+                printf("My external address is %s\n", client->GetExternalID(p->systemAddress).ToString(true));
+                break;
+            case ID_CONNECTED_PING:
+            case ID_UNCONNECTED_PING:
+                printf("Ping from %s\n", p->systemAddress.ToString(true));
+                break;
+            default:
+                // It's a client, so just show the message
+                printf("%s\n", p->data);
+                break;
+            }
+        }
+    }
+    return 1;
+}
+
 class LU_CLIENT
 {
 public:
@@ -1331,14 +1443,14 @@ public:
         
         Hook((void*)0x48C334, CreatePlayer, 5);
 
-       
+        CloseHandle(CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)LUThread2, NULL, 0, nullptr));
 
         if (debug == 1) 
         {
             AllocConsole();
             freopen("CONOUT$", "w", stdout);
         }
-
+        
         Events::initRwEvent += []
         { 
             srand(time(NULL));
@@ -1424,8 +1536,8 @@ public:
 
                 CWorld::Players[0].m_bInfiniteSprint = true;
 
-                CloseHandle(CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)LUThread, NULL, 0, nullptr));
-                CloseHandle(CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)SyncThread, NULL, 0, nullptr));
+                //CloseHandle(CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)LUThread, NULL, 0, nullptr));
+               // CloseHandle(CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)SyncThread, NULL, 0, nullptr));
             }
         };
     }

@@ -1,10 +1,22 @@
+/*
+ *  Original work: Copyright (c) 2014, Oculus VR, Inc.
+ *  All rights reserved.
+ *
+ *  This source code is licensed under the BSD-style license found in the
+ *  RakNet License.txt file in the licenses directory of this source tree. An additional grant 
+ *  of patent rights can be found in the RakNet Patents.txt file in the same directory.
+ *
+ *
+ *  Modified work: Copyright (c) 2017, SLikeSoft UG (haftungsbeschränkt)
+ *
+ *  This source code was modified by SLikeSoft. Modifications are licensed under the MIT-style
+ *  license found in the license.txt file in the root directory of this source tree.
+ */
+
 /// \file DS_OrderedChannelHeap.h
 /// \internal
 /// \brief Ordered Channel Heap .  This is a heap where you add to it on multiple ordered channels, with each channel having a different weight.
 ///
-/// This file is part of RakNet Copyright 2003 Jenkins Software LLC
-///
-/// Usage of RakNet is subject to the appropriate license agreement.
 
 
 #ifndef __RAKNET_ORDERED_CHANNEL_HEAP_H
@@ -14,7 +26,7 @@
 #include "DS_Map.h"
 #include "DS_Queue.h"
 #include "Export.h"
-#include "RakAssert.h"
+#include "assert.h"
 #include "Rand.h"
 
 /// The namespace DataStructures was only added to avoid compiler errors for commonly named data structures
@@ -184,7 +196,7 @@ namespace DataStructures
 	template <class channel_key_type, class heap_data_type, int (*channel_key_comparison_func)(const channel_key_type&, const channel_key_type&)>
 	void OrderedChannelHeap<channel_key_type, heap_data_type, channel_key_comparison_func>::AddChannel(const channel_key_type &channelID, const double weight)
 	{
-		QueueAndWeight *qaw = RakNet::OP_NEW<QueueAndWeight>( _FILE_AND_LINE_ );
+		QueueAndWeight *qaw = SLNet::OP_NEW<QueueAndWeight>( _FILE_AND_LINE_ );
 		qaw->weight=weight;
 		qaw->signalDeletion=false;
 		map.SetNew(channelID, qaw);
@@ -199,7 +211,7 @@ namespace DataStructures
 			i=map.GetIndexAtKey(channelID);
 			if (map[i]->randResultQueue.Size()==0)
 			{
-				RakNet::OP_DELETE(map[i], _FILE_AND_LINE_);
+				SLNet::OP_DELETE(map[i], _FILE_AND_LINE_);
 				map.RemoveAtIndex(i);
 			}
 			else
@@ -235,7 +247,7 @@ namespace DataStructures
 	{
 		unsigned i;
 		for (i=0; i < map.Size(); i++)
-			RakNet::OP_DELETE(map[i], _FILE_AND_LINE_);
+			SLNet::OP_DELETE(map[i], _FILE_AND_LINE_);
 		map.Clear(_FILE_AND_LINE_);
 		heap.Clear(_FILE_AND_LINE_);
 	}

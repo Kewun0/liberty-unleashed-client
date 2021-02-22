@@ -1,15 +1,34 @@
+/*
+ *  Original work: Copyright (c) 2014, Oculus VR, Inc.
+ *  All rights reserved.
+ *
+ *  This source code is licensed under the BSD-style license found in the
+ *  RakNet License.txt file in the licenses directory of this source tree. An additional grant 
+ *  of patent rights can be found in the RakNet Patents.txt file in the same directory.
+ *
+ *
+ *  Modified work: Copyright (c) 2017, SLikeSoft UG (haftungsbeschränkt)
+ *
+ *  This source code was modified by SLikeSoft. Modifications are licensed under the MIT-style
+ *  license found in the license.txt file in the root directory of this source tree.
+ */
+
+#include "defines.h"
+
+#if USE_SLIDING_WINDOW_CONGESTION_CONTROL!=1
+
 #ifndef __CONGESTION_CONTROL_UDT_H
 #define __CONGESTION_CONTROL_UDT_H
 
 #include "NativeTypes.h"
-#include "RakNetTime.h"
-#include "RakNetTypes.h"
+#include "time.h"
+#include "types.h"
 #include "DS_Queue.h"
 
 /// Set to 4 if you are using the iPod Touch TG. See http://www.jenkinssoftware.com/forum/index.php?topic=2717.0
 #define CC_TIME_TYPE_BYTES 8
 
-namespace RakNet
+namespace SLNet
 {
 
 #if CC_TIME_TYPE_BYTES==8
@@ -45,7 +64,7 @@ typedef double MicrosecondsPerByte;
 /// Requirements:
 /// <OL>
 /// <LI>Each datagram is no more than MAXIMUM_MTU_SIZE, after accounting for the UDP header
-/// <LI>Each datagram containing a user message has a sequence number which is set after calling OnSendBytes(). Set it by calling GetNextDatagramSequenceNumber()
+/// <LI>Each datagram containing a user message has a sequence number which is set after calling OnSendBytes(). Set it by calling GetAndIncrementNextDatagramSequenceNumber()
 /// <LI>System is designed to be used from a single thread.
 /// <LI>Each packet should have a timeout time based on GetSenderRTOForACK(). If this time elapses, add the packet to the head of the send list for retransmission.
 /// </OL>
@@ -93,6 +112,7 @@ class CCRakNetUDT
 
 	/// Every data packet sent must contain a sequence number
 	/// Call this function to get it. The sequence number is passed into OnGotPacketPair()
+	DatagramSequenceNumberType GetAndIncrementNextDatagramSequenceNumber(void);
 	DatagramSequenceNumberType GetNextDatagramSequenceNumber(void);
 
 	/// Call this when you send packets
@@ -112,7 +132,7 @@ class CCRakNetUDT
 
 	/// Call when you get a NAK, with the sequence number of the lost message
 	/// Affects the congestion control
-	void OnResend(CCTimeType curTime);
+	void OnResend(CCTimeType curTime, SLNet::TimeUS nextActionTime);
 	void OnNAK(CCTimeType curTime, DatagramSequenceNumberType nakSequenceNumber);
 
 	/// Call this when an ACK arrives.
@@ -120,6 +140,7 @@ class CCRakNetUDT
 	/// B and AS are used in the calculations in UpdateWindowSizeAndAckOnAckPerSyn
 	/// B and AS are updated at most once per SYN 
 	void OnAck(CCTimeType curTime, CCTimeType rtt, bool hasBAndAS, BytesPerMicrosecond _B, BytesPerMicrosecond _AS, double totalUserDataBytesAcked, bool isContinuousSend, DatagramSequenceNumberType sequenceNumber );
+	void OnDuplicateAck( CCTimeType curTime, DatagramSequenceNumberType sequenceNumber ) {}
 	
 	/// Call when you send an ack, to see if the ack should have the B and AS parameters transmitted
 	/// Call before calling OnSendAck()
@@ -141,7 +162,7 @@ class CCRakNetUDT
 	/// If we have been continuously sending for the last RTO, and no ACK or NAK at all, SND*=2;
 	/// This is per message, which is different from UDT, but RakNet supports packetloss with continuing data where UDT is only RELIABLE_ORDERED
 	/// Minimum value is 100 milliseconds
-	CCTimeType GetRTOForRetransmission(void) const;
+	CCTimeType GetRTOForRetransmission(unsigned char timesSent) const;
 
 	/// Set the maximum amount of data that can be sent in one datagram
 	/// Default to MAXIMUM_MTU_SIZE-UDP_HEADER_SIZE
@@ -172,10 +193,9 @@ class CCRakNetUDT
 //	void SetTimeBetweenSendsLimit(unsigned int bitsPerSecond);
 	uint64_t GetBytesPerSecondLimitByCongestionControl(void) const;
 
-
 	protected:
 	// --------------------------- PROTECTED VARIABLES ---------------------------
-	/// time interval between outgoing packets, in microseconds
+	/// time interval between bytes, in microseconds.
 	/// Only used when slowStart==false
 	/// Increased over time as we continually get messages
 	/// Decreased on NAK and timeout
@@ -313,7 +333,7 @@ class CCRakNetUDT
 
 	/// Most recent values read into the corresponding lists
 	/// Used during the beginning of a connection, when the median filter is still inaccurate
-	BytesPerMicrosecond mostRecentPacketPairValue, mostRecentPacketArrivalHistory;
+	BytesPerMicrosecond mostRecentPacketArrivalHistory;
 
 	bool hasWrittenToPacketPairReceiptHistory;
 
@@ -383,5 +403,7 @@ class CCRakNetUDT
 };
 
 }
+
+#endif
 
 #endif

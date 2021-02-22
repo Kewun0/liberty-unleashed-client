@@ -1,10 +1,22 @@
+/*
+ *  Original work: Copyright (c) 2014, Oculus VR, Inc.
+ *  All rights reserved.
+ *
+ *  This source code is licensed under the BSD-style license found in the
+ *  RakNet License.txt file in the licenses directory of this source tree. An additional grant 
+ *  of patent rights can be found in the RakNet Patents.txt file in the same directory.
+ *
+ *
+ *  Modified work: Copyright (c) 2016-2017, SLikeSoft UG (haftungsbeschränkt)
+ *
+ *  This source code was modified by SLikeSoft. Modifications are licensed under the MIT-style
+ *  license found in the license.txt file in the root directory of this source tree.
+ */
+
 /// \file DS_Map.h
 /// \internal
 /// \brief Map
 ///
-/// This file is part of RakNet Copyright 2003 Jenkins Software LLC
-///
-/// Usage of RakNet is subject to the appropriate license agreement.
 
 
 #ifndef __RAKNET_MAP_H
@@ -12,8 +24,8 @@
 
 #include "DS_OrderedList.h"
 #include "Export.h"
-#include "RakMemoryOverride.h"
-#include "RakAssert.h"
+#include "memoryoverride.h"
+#include "assert.h"
 
 // If I want to change this to a red-black tree, this is a good site: http://www.cs.auckland.ac.nz/software/AlgAnim/red_black.html
 // This makes insertions and deletions faster.  But then traversals are slow, while they are currently fast.
@@ -50,9 +62,6 @@ namespace DataStructures
 		// Has to be a static because the comparison callback for DataStructures::OrderedList is a C function
 		static int NodeComparisonFunc(const key_type &a, const MapNode &b)
 		{
-#ifdef _MSC_VER
-#pragma warning( disable : 4127 ) // warning C4127: conditional expression is constant
-#endif
 			return key_comparison_func(a, b.mapNodeKey);
 		}
 

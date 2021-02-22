@@ -1,16 +1,27 @@
+/*
+ *  Original work: Copyright (c) 2014, Oculus VR, Inc.
+ *  All rights reserved.
+ *
+ *  This source code is licensed under the BSD-style license found in the
+ *  RakNet License.txt file in the licenses directory of this source tree. An additional grant 
+ *  of patent rights can be found in the RakNet Patents.txt file in the same directory.
+ *
+ *
+ *  Modified work: Copyright (c) 2016-2017, SLikeSoft UG (haftungsbeschränkt)
+ *
+ *  This source code was modified by SLikeSoft. Modifications are licensed under the MIT-style
+ *  license found in the license.txt file in the root directory of this source tree.
+ */
+
 #ifndef __THREAD_POOL_H
 #define __THREAD_POOL_H
 
-#include "RakMemoryOverride.h"
+#include "memoryoverride.h"
 #include "DS_Queue.h"
 #include "SimpleMutex.h"
 #include "Export.h"
-#include "RakThread.h"
+#include "thread.h"
 #include "SignaledEvent.h"
-
-#ifdef _MSC_VER
-#pragma warning( push )
-#endif
 
 class ThreadDataInterface
 {
@@ -140,7 +151,7 @@ struct RAK_DLL_EXPORT ThreadPool
 protected:
 	// It is valid to cancel input before it is processed.  To do so, lock the inputQueue with inputQueueMutex,
 	// Scan the list, and remove the item you don't want.
-	RakNet::SimpleMutex inputQueueMutex, outputQueueMutex, workingThreadCountMutex, runThreadsMutex;
+	SLNet::SimpleMutex inputQueueMutex, outputQueueMutex, workingThreadCountMutex, runThreadsMutex;
 
 	void* (*perThreadDataFactory)();
 	void (*perThreadDataDestructor)(void*);
@@ -173,21 +184,21 @@ protected:
 	/// \internal
 	int numThreadsWorking;
 	/// \internal
-	RakNet::SimpleMutex numThreadsRunningMutex;
+	SLNet::SimpleMutex numThreadsRunningMutex;
 
-	RakNet::SignaledEvent quitAndIncomingDataEvents;
+	SLNet::SignaledEvent quitAndIncomingDataEvents;
+
+// #if defined(SN_TARGET_PSP2)
+// 	SLNet::RakThread::UltUlThreadRuntime *runtime;
+// #endif
 };
 
 #include "ThreadPool.h"
-#include "RakSleep.h"
+#include "sleep.h"
 #ifdef _WIN32
+
 #else
 #include <unistd.h>
-#endif
-
-#ifdef _MSC_VER
-#pragma warning(disable:4127)
-#pragma warning( disable : 4701 )  // potentially uninitialized local variable 'inputData' used
 #endif
 
 template <class ThreadInputType, class ThreadOutputType>
@@ -200,8 +211,13 @@ void* WorkerThread( void* arguments )
 #endif
 */
 {
-	bool returnOutput;
+
+
+
 	ThreadPool<ThreadInputType, ThreadOutputType> *threadPool = (ThreadPool<ThreadInputType, ThreadOutputType>*) arguments;
+
+
+	bool returnOutput;
 	ThreadOutputType (*userCallback)(ThreadInputType, bool *, void*);
 	ThreadInputType inputData;
 	ThreadOutputType callbackOutput;
@@ -221,14 +237,17 @@ void* WorkerThread( void* arguments )
 	++threadPool->numThreadsRunning;
 	threadPool->numThreadsRunningMutex.Unlock();
 
-	while (1)
+	for(;;)
 	{
-#ifdef _WIN32
+//#ifdef _WIN32
 		if (userCallback==0)
 		{
-			threadPool->quitAndIncomingDataEvents.WaitOnEvent(INFINITE);
-		}		
-#endif
+			threadPool->quitAndIncomingDataEvents.WaitOnEvent(1000);
+		}
+// #else
+// 		if (userCallback==0)
+// 			RakSleep(30);
+// #endif
 
 		threadPool->runThreadsMutex.Lock();
 		if (threadPool->runThreads==false)
@@ -278,7 +297,11 @@ void* WorkerThread( void* arguments )
 	else if (threadPool->threadDataInterface)
 		threadPool->threadDataInterface->PerThreadDestructor(perThreadData, threadPool->tdiContext);
 
+
+
+
 	return 0;
+
 }
 template <class InputType, class OutputType>
 ThreadPool<InputType, OutputType>::ThreadPool()
@@ -301,9 +324,14 @@ bool ThreadPool<InputType, OutputType>::StartThreads(int numThreads, int stackSi
 {
 	(void) stackSize;
 
+// #if defined(SN_TARGET_PSP2)
+// 	runtime = SLNet::RakThread::AllocRuntime(numThreads);
+// #endif
+
 	runThreadsMutex.Lock();
 	if (runThreads==true)
 	{
+		// Already running
 		runThreadsMutex.Unlock();
 		return false;
 	}
@@ -324,7 +352,13 @@ bool ThreadPool<InputType, OutputType>::StartThreads(int numThreads, int stackSi
 	int i;
 	for (i=0; i < numThreads; i++)
 	{
-		int errorCode = RakNet::RakThread::Create(WorkerThread<InputType, OutputType>, this);
+		int errorCode;
+
+
+
+
+		errorCode = SLNet::RakThread::Create(WorkerThread<InputType, OutputType>, this);
+
 		if (errorCode!=0)
 		{
 			StopThreads();
@@ -377,6 +411,12 @@ void ThreadPool<InputType, OutputType>::StopThreads(void)
 	}
 
 	quitAndIncomingDataEvents.CloseEvent();
+
+// #if defined(SN_TARGET_PSP2)
+// 	SLNet::RakThread::DeallocRuntime(runtime);
+// 	runtime=0;
+// #endif
+
 }
 template <class InputType, class OutputType>
 void ThreadPool<InputType, OutputType>::AddInput(OutputType (*workerThreadCallback)(InputType, bool *returnOutput, void* perThreadData), InputType inputData)
@@ -580,10 +620,6 @@ void ThreadPool<InputType, OutputType>::Resume(void)
 {
 	workingThreadCountMutex.Unlock();
 }
-
-#ifdef _MSC_VER
-#pragma warning( pop )
-#endif
 
 #endif
 

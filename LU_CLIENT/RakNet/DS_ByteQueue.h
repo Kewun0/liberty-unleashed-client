@@ -1,16 +1,28 @@
+/*
+ *  Copyright (c) 2014, Oculus VR, Inc.
+ *  All rights reserved.
+ *
+ *  This source code is licensed under the BSD-style license found in the
+ *  RakNet License.txt file in the licenses directory of this source tree. An additional grant 
+ *  of patent rights can be found in the RakNet Patents.txt file in the same directory.
+ *
+ *
+ *  Modified work: Copyright (c) 2017, SLikeSoft UG (haftungsbeschränkt)
+ *
+ *  This source code was modified by SLikeSoft. Modifications are licensed under the MIT-style
+ *  license found in the license.txt file in the root directory of this source tree.
+ */
+
 /// \file DS_ByteQueue.h
 /// \internal
 /// \brief Byte queue
 ///
-/// This file is part of RakNet Copyright 2003 Jenkins Software LLC
-///
-/// Usage of RakNet is subject to the appropriate license agreement.
 
 
 #ifndef __BYTE_QUEUE_H
 #define __BYTE_QUEUE_H
 
-#include "RakMemoryOverride.h"
+#include "memoryoverride.h"
 #include "Export.h"
 
 /// The namespace DataStructures was only added to avoid compiler errors for commonly named data structures

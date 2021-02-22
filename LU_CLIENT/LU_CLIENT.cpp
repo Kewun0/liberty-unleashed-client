@@ -47,7 +47,6 @@
 #include "CHud.h"
 #include "CTxdStore.h"
 #include "imgui/imgui.h"
-#include "imgui/directx8/imgui_impl_dx8.h"
 #include "imgui/directx8/imgui_impl_win32.h"
 #include "imgui_impl_rw.h"
 
@@ -71,7 +70,6 @@
 
 #pragma comment(lib,"enet.lib")
 #pragma comment(lib,"ws2_32.lib")
-#pragma comment(lib,"d3d8.lib")
 #pragma comment(lib,"winmm.lib") 
 
 extern unsigned char SCMData;
@@ -80,18 +78,7 @@ extern unsigned char SCMData;
 BOOL					bWindowedMode = false;
 BOOL                    bChatEnabled = true;
 
-IDirect3DDevice8* pD3DDevice;
-
-HRESULT   __stdcall nReset(LPDIRECT3DDEVICE8 pDevice, D3DPRESENT_PARAMETERS* pPresentationParameters);
-typedef HRESULT(APIENTRY* Reset_t) (LPDIRECT3DDEVICE8 pDevice, D3DPRESENT_PARAMETERS* pPresentationParameters);
-Reset_t     pReset;
-
-
-HRESULT   __stdcall  nPresent(LPDIRECT3DDEVICE8 pDevice, CONST RECT* pSourceRect, CONST RECT* pDestRect, HWND hDestWindowOverride, CONST RGNDATA* pDirtyRegion);
-typedef HRESULT(APIENTRY* Present_t)(LPDIRECT3DDEVICE8 pDevice, CONST RECT* pSourceRect, CONST RECT* pDestRect, HWND hDestWindowOverride, CONST RGNDATA* pDirtyRegion);
-Present_t   pPresent;
-
-extern LRESULT ImGui_ImplDX8_WndProcHandler(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+extern LRESULT ImGui_ImplRW_WndProcHandler(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 LRESULT __stdcall HookedWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
@@ -135,9 +122,6 @@ char(__thiscall* original_CPed__InflictDamage)(CPed*, CEntity*, eWeaponType, flo
 
 int(__thiscall* original_CPlayerPed__ProcessControl)(CPlayerPed*);
 int(__thiscall* original_CAutomobile__ProcessControl)(CAutomobile*);
- 
-
-void onD3DRender(LPDIRECT3DDEVICE8 pDevice);
 
 using namespace plugin;
 
@@ -219,24 +203,6 @@ GTA_CONTROLSET gcsRemotePlayerKeys[50];
 CPed* FindLocalPlayer() { return CWorld::Players[0].m_pPed; }
 
 int iPlayerNumber = 1;
-
-void DrawBox(IDirect3DDevice8* pDevice, int x, int y, int w, int h, D3DCOLOR col)
-{
-    struct {
-        float x, y, z, rhw;
-        DWORD dwColor;
-    } qV[4] = { { (float)x    , (float)(y + h), 0.0f, 0.0f, col},
-                { (float)x    , (float)y    , 0.0f, 0.0f, col},
-                { (float)(x + w), (float)(y + h), 0.0f, 0.0f, col},
-                { (float)(x + w), (float)y    , 0.0f, 0.0f, col} };
-
-    IDirect3DDevice8_SetPixelShader(pDevice,NULL);
-    IDirect3DDevice8_SetRenderState(pDevice,D3DRS_ALPHABLENDENABLE, true);
-    IDirect3DDevice8_SetRenderState(pDevice,D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
-    IDirect3DDevice8_SetTexture(pDevice,0, NULL);
-    IDirect3DDevice8_DrawPrimitiveUP(pDevice,D3DPT_TRIANGLESTRIP, 2, qV, sizeof(qV[0]));
-}
-
 
 BYTE FindPlayerNumFromPedPtr(DWORD dwPedPtr)
 {
@@ -508,7 +474,7 @@ LRESULT __stdcall HookedWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
     io.MouseDrawCursor = false;
     if (1==1)
     {
-        ImGui_ImplDX8_WndProcHandler(hWnd, uMsg, wParam, lParam);
+        ImGui_ImplRW_WndProcHandler(hWnd, uMsg, wParam, lParam);
         return DefWindowProc(hWnd, uMsg, wParam, lParam);
     }
     return FALSE;
@@ -1014,17 +980,6 @@ DWORD WINAPI LUThread(HMODULE hModule)
 
 int has_done = 0;
 
-HRESULT __stdcall nReset(LPDIRECT3DDEVICE8 pDevice, D3DPRESENT_PARAMETERS* pPresentationParameters)
-{
-    _asm PUSHAD;
-
-    printf("Hook Reset\n");
-
-    _asm POPAD;
-
-    return pReset(pDevice, pPresentationParameters);
-}
-
 bool   wndHookInited = false;
 bool Initialized = false;
 WNDPROC			orig_wndproc;
@@ -1033,6 +988,7 @@ extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg, WPARAM wParam
 
 LRESULT CALLBACK wnd_proc(HWND wnd, UINT umsg, WPARAM wparam, LPARAM lparam)
 {
+    ImGuiIO& io = ImGui::GetIO();
     switch (umsg)
     {
     case WM_DESTROY:
@@ -1061,62 +1017,29 @@ LRESULT CALLBACK wnd_proc(HWND wnd, UINT umsg, WPARAM wparam, LPARAM lparam)
         if (GetActiveWindow() == FindWindow(0,"GTA3"))
             ClipCursor(&rect);
         break;
+    case WM_KEYUP:
+        if (wparam < 256)
+           
+            io.KeysDown[wparam] = 0;
+        if (wparam == VK_RETURN) io.KeysDown[ImGuiKey_Enter] = 0;
+        break;
     case WM_MOUSEHOVER:
         break;
     case WM_SYSKEYDOWN:
     case WM_KEYDOWN:
     {
         if (wparam == VK_F5) bChatEnabled = !bChatEnabled;
+        if (wparam == VK_RETURN) io.KeysDown[ImGuiKey_Enter] = 1;
+        if (wparam < 256)
+            io.KeysDown[wparam] = 1;
     }
     }
-    if (ImGui_ImplDX8_WndProcHandler(wnd, umsg, wparam, lparam)&&mouse==1) return 0;
+    if (ImGui_ImplRW_WndProcHandler(wnd, umsg, wparam, lparam)&&mouse==1) return 0;
 
     return CallWindowProc(orig_wndproc, wnd, umsg, wparam, lparam);
 }
+
 void RenderChatbox();
-
-HRESULT __stdcall nPresent(LPDIRECT3DDEVICE8 pDevice, CONST RECT* pSourceRect, CONST RECT* pDestRect, HWND hDestWindowOverride, CONST RGNDATA* pDirtyRegion)
-{
-    _asm PUSHAD;
-
-
-    if (!wndHookInited)
-    {
-        printf("Initing windows hook for imgui\n");
-        ImGui::CreateContext();
-        HWND  wnd = FindWindow(0, "GTA3");
-        if (wnd)
-        {
-            printf("Window found & context created\n");
-            if (orig_wndproc == NULL || wnd != orig_wnd)
-            {
-                orig_wndproc = (WNDPROC)(UINT_PTR)SetWindowLong(wnd, GWL_WNDPROC, (LONG)(UINT_PTR)wnd_proc);
-                orig_wnd = wnd;
-                ImmAssociateContext(wnd, 0);
-            }
-            RECT rect;
-
-            printf("associated\n");
-
-            GetWindowRect(wnd, &rect);
-            wndHookInited = true;
-
-            ImGui_ImplDX8_Init(orig_wnd, pDevice);
-            printf("IMGUI HAS BEEN IMPLEMENTED\n");
-
-            Initialized = true;
-        }
-        wndHookInited = true;
-    }
-    else
-    {
-        if ( bChatEnabled ) RenderChatbox();
-    }
-
-    _asm POPAD;
-
-    return  pPresent(pDevice, pSourceRect, pDestRect, hDestWindowOverride, pDirtyRegion);
-}
 
 bool bCompare(const BYTE* pData, const BYTE* bMask, const char* szMask)
 {
@@ -1135,51 +1058,11 @@ MODULEINFO GetModuleInfo(char* szModule)
     return modinfo;
 }
 
-DWORD _FindPattern(char* moduled, char* pattern, char* mask)
-{
-    MODULEINFO mInfo = GetModuleInfo(moduled);
-    DWORD base = (DWORD)mInfo.lpBaseOfDll;
-    DWORD size = (DWORD)mInfo.SizeOfImage;
-    DWORD patternLength = (DWORD)strlen(mask);
-
-    for (DWORD i = 0; i < size - patternLength; i++)
-    {
-        bool found = true;
-        for (DWORD j = 0; j < patternLength; j++)
-        {
-            found &= mask[j] == '?' || pattern[j] == *(char*)(base + i + j);
-        }
-        if (found)
-        {
-            return base + i;
-        }
-    }
-
-    return NULL;
-}
-
 DWORD FindPattern(DWORD dwAddress, DWORD dwLen, BYTE* bMask, char* szMask)
 {
     for (DWORD i = 0; i < dwLen; i++)
         if (bCompare((BYTE*)(dwAddress + i), bMask, szMask))  return (DWORD)(dwAddress + i);
     return 0;
-}
-
-DWORD_PTR* _FindDevice(DWORD Base, DWORD Len)
-{
-    unsigned long i = 0, n = 0;
-
-    for (i = 0; i < Len; i++)
-    {
-        if (*(BYTE*)(Base + i + 0x00) == 0xC7)n++;
-        if (*(BYTE*)(Base + i + 0x01) == 0x06)n++;
-        if (*(BYTE*)(Base + i + 0x06) == 0x89)n++;
-        if (*(BYTE*)(Base + i + 0x07) == 0x86)n++;
-        if (*(BYTE*)(Base + i + 0x0C) == 0x89)n++;
-        if (*(BYTE*)(Base + i + 0x0D) == 0x86)n++;
-        if (n == 6) return (DWORD_PTR*)(Base + i + 2); n = 0;
-    }
-    return(0);
 }
 
 DWORD GetModuleSize(LPSTR lpModuleName, DWORD dwProcessId)
@@ -1228,12 +1111,9 @@ char* TrampHook(char* src, char* dst, unsigned int len)
 }
 
 static HWND window;
-typedef HRESULT(APIENTRY* tEndScene)(LPDIRECT3DDEVICE8 pDevice);
+
 
 bool bInit = false;
-tEndScene oEndScene = nullptr;
-
-
 
 
 
@@ -1246,7 +1126,7 @@ BOOL CALLBACK EnumWindowsCallback(HWND handle, LPARAM lParam)
         return TRUE; // skip to next window
 
     window = handle;
-    return FALSE; // window found abort search
+    return FALSE; 
 }
 
 HWND GetProcessWindow()
@@ -1254,98 +1134,6 @@ HWND GetProcessWindow()
     window = NULL;
     EnumWindows(EnumWindowsCallback, NULL);
     return window;
-}
-
-bool GetD3D8Device(void** pTable, size_t Size)
-{
-    if (!pTable)
-        return false;
-
-    printf("Sariki\n");
-
-    IDirect3D8* pD3D = Direct3DCreate8(D3D_SDK_VERSION);
-
-    if (!pD3D)
-        return false;
-
-    IDirect3DDevice8* pDummyDevice = NULL;
-
-    D3DPRESENT_PARAMETERS d3dpp = {};
-    d3dpp.Windowed = false;
-    d3dpp.SwapEffect = D3DSWAPEFFECT_DISCARD;
-    d3dpp.hDeviceWindow = GetProcessWindow();
-
-    printf("Bato\n");
-
-    
-    HRESULT dummyDeviceCreated = IDirect3D8_CreateDevice(pD3D,D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, d3dpp.hDeviceWindow, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &d3dpp, &pDummyDevice);
-
-    if (dummyDeviceCreated != S_OK)
-    {
-        printf("Not ok\n");
-        // may fail in windowed fullscreen mode, trying again with windowed mode
-        d3dpp.Windowed = !d3dpp.Windowed;
-
-        dummyDeviceCreated = IDirect3D8_CreateDevice(pD3D,D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, d3dpp.hDeviceWindow, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &d3dpp, &pDummyDevice);
-
-        if (dummyDeviceCreated != S_OK)
-        {
-            printf("Returning false\n");
-            IDirect3D8_Release(pD3D);
-            return false;
-        }
-    }
-
-    memcpy(pTable, *reinterpret_cast<void***>(pDummyDevice), Size);
-
-    IDirect3D8_Release(pDummyDevice);
-    IDirect3D8_Release(pD3D);
-    return true;
-}
-void* d3d8Device[119];
-
-HRESULT APIENTRY hkEndScene(LPDIRECT3DDEVICE8 pDevice)
-{
-    if (bInit == false)
-    {
-        pD3DDevice = pDevice;
-        bInit = true;
-    }
-
-    printf("END SCENE\n");
-
-    return oEndScene(pDevice);
-}
-
-int __fastcall StaticHook(void)
-{
-    HMODULE hD3D8Dll;
-    do
-    {
-        hD3D8Dll = GetModuleHandle("d3d8.dll");
-        Sleep(20);
-    } while (!hD3D8Dll);
-
-    DWORD_PTR* VtablePtr = _FindDevice((DWORD)hD3D8Dll, 0x128000);
-
-    if (VtablePtr == NULL)
-    {
-        MessageBox(NULL, "Device not found", 0, MB_ICONSTOP);
-        ExitProcess(TRUE);
-    }
-
-    DWORD_PTR* VTable = 0;
-    *(DWORD_PTR*)&VTable = *(DWORD_PTR*)VtablePtr;
-
-    pPresent = (Present_t)DetourFunction((PBYTE)VTable[15], (LPBYTE)nPresent);
-    pReset = (Reset_t)DetourFunction((PBYTE)VTable[14], (LPBYTE)nReset);
-
-    return(0);
-}
-
-void InitHook()
-{
-
 }
 
 void CCamera_SetCamPositionForFixedMode(CVector const& vecFixedModeSource, CVector const& vecFixedModeUpOffSet) {
@@ -1607,6 +1395,26 @@ public:
             ImGuiIO& io = ImGui::GetIO();
 
             ImGui_ImplRenderWare_Init();
+
+            printf("Initing windows hook for imgui\n");
+            HWND  wnd = FindWindow(0, "GTA3");
+            if (wnd)
+            {
+                printf("Window found & context created\n");
+                if (orig_wndproc == NULL || wnd != orig_wnd)
+                {
+                    orig_wndproc = (WNDPROC)(UINT_PTR)SetWindowLong(wnd, GWL_WNDPROC, (LONG)(UINT_PTR)wnd_proc);
+                    orig_wnd = wnd;
+                    ImmAssociateContext(wnd, 0);
+                }
+                RECT rect;
+                printf("associated\n");
+                GetWindowRect(wnd, &rect);
+                wndHookInited = true;
+                printf("IMGUI HAS BEEN IMPLEMENTED\n");
+                Initialized = true;
+            }
+            wndHookInited = true;
 
             Command<0x3F7>(0);
 

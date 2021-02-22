@@ -105,7 +105,6 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="imgui\directx8\imgui_impl_dx8.cpp" />
     <ClCompile Include="imgui\directx8\imgui_impl_win32.cpp" />
     <ClCompile Include="imgui\imgui.cpp" />
     <ClCompile Include="imgui\imgui_draw.cpp" />
@@ -114,7 +113,6 @@
     <ClCompile Include="LU_CLIENT.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="imgui\directx8\imgui_impl_dx8.h" />
     <ClInclude Include="imgui\directx8\imgui_impl_win32.h" />
     <ClInclude Include="imgui\imconfig.h" />
     <ClInclude Include="imgui\imgui.h" />

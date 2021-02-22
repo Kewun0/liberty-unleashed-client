@@ -7,9 +7,6 @@
     <ClCompile Include="imgui\imgui_draw.cpp">
       <Filter>imgui</Filter>
     </ClCompile>
-    <ClCompile Include="imgui\directx8\imgui_impl_dx8.cpp">
-      <Filter>imgui</Filter>
-    </ClCompile>
     <ClCompile Include="imgui\directx8\imgui_impl_win32.cpp">
       <Filter>imgui</Filter>
     </ClCompile>
@@ -31,9 +28,6 @@
       <Filter>imgui</Filter>
     </ClInclude>
     <ClInclude Include="imgui\imgui.h">
-      <Filter>imgui</Filter>
-    </ClInclude>
-    <ClInclude Include="imgui\directx8\imgui_impl_dx8.h">
       <Filter>imgui</Filter>
     </ClInclude>
     <ClInclude Include="imgui\directx8\imgui_impl_win32.h">

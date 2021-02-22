@@ -955,7 +955,7 @@ DWORD WINAPI LUThread(HMODULE hModule)
 
     while (enet_host_service(client, &event, 2000) > 0)
     {
-        switch (event.type)
+        switch (event.type) 
         {
         case ENET_EVENT_TYPE_RECEIVE:
 

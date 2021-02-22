@@ -994,6 +994,15 @@ extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg, WPARAM wParam
 LRESULT CALLBACK wnd_proc(HWND wnd, UINT umsg, WPARAM wparam, LPARAM lparam)
 {
     ImGuiIO& io = ImGui::GetIO();
+    io.KeyMap[ImGuiKey_Enter] = VK_RETURN;
+    io.KeyMap[ImGuiKey_Backspace] = VK_BACK;
+    io.KeyMap[ImGuiKey_Escape] = VK_ESCAPE;
+    io.KeyMap[ImGuiKey_DownArrow] = VK_DOWN;
+    io.KeyMap[ImGuiKey_UpArrow] = VK_UP;
+    io.KeyMap[ImGuiKey_RightArrow] = VK_RIGHT;
+    io.KeyMap[ImGuiKey_LeftArrow] = VK_LEFT;
+
+
     switch (umsg)
     {
     case WM_DESTROY:
@@ -1026,7 +1035,7 @@ LRESULT CALLBACK wnd_proc(HWND wnd, UINT umsg, WPARAM wparam, LPARAM lparam)
         if (wparam < 256)
            
             io.KeysDown[wparam] = 0;
-        if (wparam == VK_RETURN) io.KeysDown[ImGuiKey_Enter] = 0;
+        
         break;
     case WM_MOUSEHOVER:
         break;
@@ -1039,7 +1048,7 @@ LRESULT CALLBACK wnd_proc(HWND wnd, UINT umsg, WPARAM wparam, LPARAM lparam)
             io.KeysDown[wparam] = 1;
     }
     }
-    if (ImGui_ImplRW_WndProcHandler(wnd, umsg, wparam, lparam)&&mouse==1) return 0;
+    if (ImGui_ImplWin32_WndProcHandler(wnd, umsg, wparam, lparam)&&mouse==1) return 0;
 
     return CallWindowProc(orig_wndproc, wnd, umsg, wparam, lparam);
 }
@@ -1215,12 +1224,6 @@ void InitSettings()
     }
 }
 
-const char* my_fun(const char* par)
-{
-    
-    return par;
-}
-
 unsigned int getfilesize(const char* path)
 {
     struct stat ss;
@@ -1231,13 +1234,6 @@ unsigned int getfilesize(const char* path)
 bool is_dll_loaded(LPCSTR moduleName)
 {
     return GetModuleHandle(moduleName);
-}
-
-LPDIRECT3DDEVICE8 p_Device;
-
-void onD3DRender(LPDIRECT3DDEVICE8 pDevice)
-{
-    pDevice = p_Device;
 }
 
 void IsPaused()
@@ -1296,7 +1292,6 @@ __declspec(naked) void CreatePlayer()
         jmp jmpAddy
     }
 }
-
 
 class LU_CLIENT
 {

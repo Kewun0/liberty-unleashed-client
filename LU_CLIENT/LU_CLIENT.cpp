@@ -1321,6 +1321,8 @@ public:
         patch::Nop(0x48C26B, 5); // Don't init scripts
         patch::Nop(0x48C32F, 5); // Don't process
         patch::Nop(0x48C975, 5); // Disable Replays
+        patch::Nop(0x40B58D, 5); // Disable Island Load screen
+        patch::Nop(0x40B59B, 5); // Disable Island Load screen 2
 
         Hook((void*)0x48C334, CreatePlayer, 5);
 

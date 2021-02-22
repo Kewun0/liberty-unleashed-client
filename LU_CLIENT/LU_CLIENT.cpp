@@ -1303,7 +1303,7 @@ class LU_CLIENT
 public:
     LU_CLIENT()
     {
-        for (int i = 0; i <= 128; i++)
+        for (int i = 0; i <= 256; i++)
         {
             client_map[i] = new Clients(i);
         }

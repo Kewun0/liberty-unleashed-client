@@ -222,6 +222,11 @@ BYTE FindPlayerNumFromPedPtr(DWORD dwPedPtr)
     return 0;
 }
 
+void Log(const char* text)
+{
+    printf("%s\n", text);
+}
+
 std::string insert_newlines(const std::string& in, const size_t every_n)
 {
     std::string out;
@@ -1112,11 +1117,6 @@ char* TrampHook(char* src, char* dst, unsigned int len)
 
 static HWND window;
 
-
-bool bInit = false;
-
-
-
 BOOL CALLBACK EnumWindowsCallback(HWND handle, LPARAM lParam)
 {
     DWORD wndProcId;
@@ -1254,7 +1254,6 @@ void RenderChatbox()
     {
         ImGui_ImplRenderWare_NewFrame();
         ImGui::NewFrame();
-
         ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
         ImGui::SetNextWindowSize(ImVec2(512, 256));
 
@@ -1262,7 +1261,6 @@ void RenderChatbox()
 
         if (mouse == 1)
         {
-
             io.MouseDrawCursor = true;
         }
         else { io.MouseDrawCursor = false; }
@@ -1305,8 +1303,6 @@ class LU_CLIENT
 public:
     LU_CLIENT()
     {
-        
-
         for (int i = 0; i <= 128; i++)
         {
             client_map[i] = new Clients(i);
@@ -1393,14 +1389,11 @@ public:
         {
             ImGui::CreateContext();
             ImGuiIO& io = ImGui::GetIO();
-
             ImGui_ImplRenderWare_Init();
 
-            printf("Initing windows hook for imgui\n");
             HWND  wnd = FindWindow(0, "GTA3");
             if (wnd)
             {
-                printf("Window found & context created\n");
                 if (orig_wndproc == NULL || wnd != orig_wnd)
                 {
                     orig_wndproc = (WNDPROC)(UINT_PTR)SetWindowLong(wnd, GWL_WNDPROC, (LONG)(UINT_PTR)wnd_proc);
@@ -1408,10 +1401,8 @@ public:
                     ImmAssociateContext(wnd, 0);
                 }
                 RECT rect;
-                printf("associated\n");
                 GetWindowRect(wnd, &rect);
                 wndHookInited = true;
-                printf("IMGUI HAS BEEN IMPLEMENTED\n");
                 Initialized = true;
             }
             wndHookInited = true;

@@ -1464,7 +1464,8 @@ void RenderChatbox()
 {
     if (m_gameStarted == 1)
     {
-        ImGui_ImplDX8_NewFrame();
+        ImGui_ImplRenderWare_NewFrame();
+        ImGui::NewFrame();
 
         ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
         ImGui::SetNextWindowSize(ImVec2(512, 256));
@@ -1489,6 +1490,7 @@ void RenderChatbox()
 
         ImGui::EndFrame();
         ImGui::Render();
+        ImGui_ImplRenderWare_RenderDrawData(ImGui::GetDrawData());
     }
 }
 
@@ -1543,9 +1545,6 @@ public:
 
         Hook((void*)0x48C334, CreatePlayer, 5);
 
-
-        StaticHook();
-
         if (debug == 1) 
         {
             AllocConsole();
@@ -1555,11 +1554,6 @@ public:
         Events::initRwEvent += []
         { 
             srand(time(NULL));
-
-            ImGui::CreateContext();
-            ImGuiIO& io = ImGui::GetIO();
-
-            ImGui_ImplRenderWare_Init();
 
             GameKeyStatesInit();
             InstallMethodHook(0x5FA308, (DWORD)CPlayerPed_ProcessControl_Hook);
@@ -1583,6 +1577,11 @@ public:
                 , 5);
         }};
 
+        Events::drawingEvent += []
+        {
+            RenderChatbox();
+        };
+
         Events::processScriptsEvent += []
         {
             update();
@@ -1602,18 +1601,13 @@ public:
             ProcessSync();
         };
 
-        Events::d3dLostEvent += []
-        {
-            ImGui_ImplDX8_InvalidateDeviceObjects();
-        };
-
-        Events::d3dResetEvent += []
-        {
-            ImGui_ImplDX8_InvalidateDeviceObjects(); 
-        };
-
         Events::initGameEvent += []
         {
+            ImGui::CreateContext();
+            ImGuiIO& io = ImGui::GetIO();
+
+            ImGui_ImplRenderWare_Init();
+
             Command<0x3F7>(0);
 
             if (m_gameStarted == 0) m_gameStarted = 1;

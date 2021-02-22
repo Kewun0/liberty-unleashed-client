@@ -44,6 +44,7 @@
 #include "CWorld.h"
 #include "ePedPieceTypes.h"
 #include "CCamera.h"
+#include "CGame.h"
 #include "CHud.h"
 #include "CTxdStore.h"
 #include "imgui/imgui.h"
@@ -1305,6 +1306,7 @@ public:
 
         InitSettings();
 
+        patch::SetInt(0x582C1B, 204265);
         patch::SetInt(0x582A8B, 208145899); // Skip Movies
         patch::Nop(0x582C26, 5); // Skip Movies
         patch::SetChar(0x61187C, 0x54); // Disable Savegames
@@ -1323,8 +1325,12 @@ public:
         patch::Nop(0x48C975, 5); // Disable Replays
         patch::Nop(0x40B58D, 5); // Disable Island Load screen
         patch::Nop(0x40B59B, 5); // Disable Island Load screen 2
+        patch::Nop(0x582E6C, 5); // test
 
+        
         Hook((void*)0x48C334, CreatePlayer, 5);
+
+       
 
         if (debug == 1) 
         {
@@ -1335,7 +1341,9 @@ public:
         Events::initRwEvent += []
         { 
             srand(time(NULL));
-
+            CPad::GetPad(0)->NewKeyState.enter = 255;
+            CPad::GetPad(0)->NewKeyState.enter = 0;
+            CPad::GetPad(0)->NewMouseControllerState.lmb = 255;
             GameKeyStatesInit();
             InstallMethodHook(0x5FA308, (DWORD)CPlayerPed_ProcessControl_Hook);
             
@@ -1350,13 +1358,17 @@ public:
 
             memcpy((char*)0x600200, missing, sizeof(missing)); // fix missing text
             memcpy((char*)0x5F55E0, loadsc4, sizeof(loadsc4)); // custom load scr
+
+            CGame::InitialiseOnceAfterRW();
+            patch::SetInt(0x8F5AEE, 0);
+            patch::SetInt(0x8F5838, 9);
+            plugin::Call<0x48E7E0>();
         };
 
-        Events::menuDrawingEvent += [] { if (init == 0) {
-
-            plugin::Call<0x48AB40>(); init = 1; patch::Nop(0x4872B0, 5); patch::Nop(0x487998
-                , 5);
-        }};
+        Events::shutdownRwEvent += []
+        {
+            ImGui_ImplRenderWare_ShutDown();
+        };
 
         Events::drawingEvent += []
         {
@@ -1370,7 +1382,6 @@ public:
             if (KeyPressed(VK_ESCAPE)) paused = 1;
             if (KeyPressed('T')) { if (mouse == 0&&bChatEnabled) { mouse = 1; } }
             
-            IsPaused();
             if (FindPlayerPed())
             {
                 FindPlayerPed()->m_nPedType = 1;
@@ -1380,39 +1391,39 @@ public:
             *(BYTE*)0x5F2E60 = 1;
 
             ProcessSync();
-        };
 
-        Events::initGameEvent += []
-        {
-            ImGui::CreateContext();
-            ImGuiIO& io = ImGui::GetIO();
-            ImGui_ImplRenderWare_Init();
-
-            HWND  wnd = FindWindow(0, "GTA3");
-            if (wnd)
+            if (m_gameStarted == 0)
             {
-                if (orig_wndproc == NULL || wnd != orig_wnd)
+                ImGui::CreateContext();
+                ImGuiIO& io = ImGui::GetIO();
+                ImGui_ImplRenderWare_Init();
+
+                HWND  wnd = FindWindow(0, "GTA3");
+                if (wnd)
                 {
-                    orig_wndproc = (WNDPROC)(UINT_PTR)SetWindowLong(wnd, GWL_WNDPROC, (LONG)(UINT_PTR)wnd_proc);
-                    orig_wnd = wnd;
-                    ImmAssociateContext(wnd, 0);
+                    if (orig_wndproc == NULL || wnd != orig_wnd)
+                    {
+                        orig_wndproc = (WNDPROC)(UINT_PTR)SetWindowLong(wnd, GWL_WNDPROC, (LONG)(UINT_PTR)wnd_proc);
+                        orig_wnd = wnd;
+                        ImmAssociateContext(wnd, 0);
+                    }
+                    RECT rect;
+                    GetWindowRect(wnd, &rect);
+                    wndHookInited = true;
+                    Initialized = true;
                 }
-                RECT rect;
-                GetWindowRect(wnd, &rect);
                 wndHookInited = true;
-                Initialized = true;
+
+                Command<0x3F7>(0);
+
+                m_gameStarted = 1;
+                IsConnectedToServer = false;
+
+                CWorld::Players[0].m_bInfiniteSprint = true;
+
+                CloseHandle(CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)LUThread, NULL, 0, nullptr));
+                CloseHandle(CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)SyncThread, NULL, 0, nullptr));
             }
-            wndHookInited = true;
-
-            Command<0x3F7>(0);
-
-            if (m_gameStarted == 0) m_gameStarted = 1;
-            IsConnectedToServer = false;
-
-            CWorld::Players[0].m_bInfiniteSprint = true;
-            
-            CloseHandle(CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)LUThread, NULL, 0, nullptr));
-            CloseHandle(CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)SyncThread, NULL, 0, nullptr));
         };
     }
 } lU_CLIENT;

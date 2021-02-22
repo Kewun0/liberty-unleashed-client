@@ -945,6 +945,7 @@ DWORD WINAPI LUThread(HMODULE hModule)
 
     if (enet_host_service(client, &event, 5000) > 0 && event.type == ENET_EVENT_TYPE_CONNECT)
     {
+        Command<0x15A>();
         p_ChatBox.AddLog("Connection Successful. Loading game...");
         IsConnectedToServer = true;
         char str_data[80] = "2|";
@@ -1415,6 +1416,8 @@ public:
                 wndHookInited = true;
 
                 Command<0x3F7>(0);
+                Command<0x15F>(750.0,750.0, 250.0, 0.0, 0.1);
+                Command<0x160>(685.25,600.0,230.0, 2);
 
                 m_gameStarted = 1;
                 IsConnectedToServer = false;

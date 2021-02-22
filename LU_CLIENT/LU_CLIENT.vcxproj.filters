@@ -19,6 +19,9 @@
     <ClCompile Include="LU_CLIENT.cpp">
       <Filter>client</Filter>
     </ClCompile>
+    <ClCompile Include="imgui_impl_rw.cpp">
+      <Filter>imgui</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="imgui\imstb_truetype.h">
@@ -43,6 +46,9 @@
       <Filter>imgui</Filter>
     </ClInclude>
     <ClInclude Include="imgui\imstb_textedit.h">
+      <Filter>imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="imgui_impl_rw.h">
       <Filter>imgui</Filter>
     </ClInclude>
   </ItemGroup>

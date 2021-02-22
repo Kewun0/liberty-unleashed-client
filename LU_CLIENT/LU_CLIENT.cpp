@@ -35,6 +35,8 @@
 #define ADDR_KEYSTATES 0x6F0360
 #define  _SL_STATIC
 #define NUDE void _declspec(naked) 
+#define MULT_X	0.00052083333f	// 1/1920
+#define MULT_Y	0.00092592592f 	// 1/1080
 
 #include "plugin.h"
 #include "CMenuManager.h"
@@ -47,11 +49,13 @@
 #include "imgui/imgui.h"
 #include "imgui/directx8/imgui_impl_dx8.h"
 #include "imgui/directx8/imgui_impl_win32.h"
+#include "imgui_impl_rw.h"
 
 #include <stdio.h>
 #include <thread>
 #include <enet/enet.h>
 #include <detours.h>
+#include <Psapi.h>
 #include <io.h>
 #include <stdlib.h>
 #include <chrono> 
@@ -59,6 +63,7 @@
 #include <windowsx.h>
 #include <map> 
 #include <d3d8.h>
+
 
 #pragma warning(disable: 4018)
 #pragma warning(disable: 4244)
@@ -1120,6 +1125,39 @@ bool bCompare(const BYTE* pData, const BYTE* bMask, const char* szMask)
     return (*szMask) == NULL;
 }
 
+MODULEINFO GetModuleInfo(char* szModule)
+{
+    MODULEINFO modinfo = { 0 };
+    HMODULE hModule = GetModuleHandle(szModule);
+    if (hModule == 0)
+        return modinfo;
+    GetModuleInformation(GetCurrentProcess(), hModule, &modinfo, sizeof(MODULEINFO));
+    return modinfo;
+}
+
+DWORD _FindPattern(char* moduled, char* pattern, char* mask)
+{
+    MODULEINFO mInfo = GetModuleInfo(moduled);
+    DWORD base = (DWORD)mInfo.lpBaseOfDll;
+    DWORD size = (DWORD)mInfo.SizeOfImage;
+    DWORD patternLength = (DWORD)strlen(mask);
+
+    for (DWORD i = 0; i < size - patternLength; i++)
+    {
+        bool found = true;
+        for (DWORD j = 0; j < patternLength; j++)
+        {
+            found &= mask[j] == '?' || pattern[j] == *(char*)(base + i + j);
+        }
+        if (found)
+        {
+            return base + i;
+        }
+    }
+
+    return NULL;
+}
+
 DWORD FindPattern(DWORD dwAddress, DWORD dwLen, BYTE* bMask, char* szMask)
 {
     for (DWORD i = 0; i < dwLen; i++)
@@ -1174,36 +1212,121 @@ DWORD GetModuleSize(LPSTR lpModuleName, DWORD dwProcessId)
     return NULL;
 }
 
+char* TrampHook(char* src, char* dst, unsigned int len)
+{
+    if (len < 5) return 0;
+    char* gateway = (char*)VirtualAlloc(0, len + 5, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    memcpy(gateway, src, len);
+    uintptr_t gateJmpAddy = (uintptr_t)(src - gateway - 5);
+    *(gateway + len) = (char)0xE9;
+    *(uintptr_t*)(gateway + len + 1) = gateJmpAddy;
+    if (Hook(src, dst, len))
+    {
+        return gateway;
+    }
+    else return nullptr;
+}
 
+static HWND window;
+typedef HRESULT(APIENTRY* tEndScene)(LPDIRECT3DDEVICE8 pDevice);
+
+bool bInit = false;
+tEndScene oEndScene = nullptr;
+
+
+
+
+
+BOOL CALLBACK EnumWindowsCallback(HWND handle, LPARAM lParam)
+{
+    DWORD wndProcId;
+    GetWindowThreadProcessId(handle, &wndProcId);
+
+    if (GetCurrentProcessId() != wndProcId)
+        return TRUE; // skip to next window
+
+    window = handle;
+    return FALSE; // window found abort search
+}
+
+HWND GetProcessWindow()
+{
+    window = NULL;
+    EnumWindows(EnumWindowsCallback, NULL);
+    return window;
+}
+
+bool GetD3D8Device(void** pTable, size_t Size)
+{
+    if (!pTable)
+        return false;
+
+    printf("Sariki\n");
+
+    IDirect3D8* pD3D = Direct3DCreate8(D3D_SDK_VERSION);
+
+    if (!pD3D)
+        return false;
+
+    IDirect3DDevice8* pDummyDevice = NULL;
+
+    D3DPRESENT_PARAMETERS d3dpp = {};
+    d3dpp.Windowed = false;
+    d3dpp.SwapEffect = D3DSWAPEFFECT_DISCARD;
+    d3dpp.hDeviceWindow = GetProcessWindow();
+
+    printf("Bato\n");
+
+    
+    HRESULT dummyDeviceCreated = IDirect3D8_CreateDevice(pD3D,D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, d3dpp.hDeviceWindow, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &d3dpp, &pDummyDevice);
+
+    if (dummyDeviceCreated != S_OK)
+    {
+        printf("Not ok\n");
+        // may fail in windowed fullscreen mode, trying again with windowed mode
+        d3dpp.Windowed = !d3dpp.Windowed;
+
+        dummyDeviceCreated = IDirect3D8_CreateDevice(pD3D,D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, d3dpp.hDeviceWindow, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &d3dpp, &pDummyDevice);
+
+        if (dummyDeviceCreated != S_OK)
+        {
+            printf("Returning false\n");
+            IDirect3D8_Release(pD3D);
+            return false;
+        }
+    }
+
+    memcpy(pTable, *reinterpret_cast<void***>(pDummyDevice), Size);
+
+    IDirect3D8_Release(pDummyDevice);
+    IDirect3D8_Release(pD3D);
+    return true;
+}
+void* d3d8Device[119];
+
+HRESULT APIENTRY hkEndScene(LPDIRECT3DDEVICE8 pDevice)
+{
+    if (bInit == false)
+    {
+        pD3DDevice = pDevice;
+        bInit = true;
+    }
+
+    printf("END SCENE\n");
+
+    return oEndScene(pDevice);
+}
 
 int __fastcall StaticHook(void)
 {
-    printf("Trying to hook d3d8\n");
-
-    DWORD* VTableHook = 0;
     HMODULE hD3D8Dll;
-    DWORD d3d8dll;
     do
     {
-        d3d8dll = (DWORD)GetModuleHandle("d3d8.dll");
-        Sleep(10);
+        hD3D8Dll = GetModuleHandle("d3d8.dll");
+        Sleep(20);
+    } while (!hD3D8Dll);
 
-    } while (d3d8dll == NULL);
-
-    printf("d3d8.dll found\n");
-
-    char mask[32];
-    sprintf(mask, "xx????xx????xx");
-
-    printf("Scanning pattern\n");
-
-    DWORD VtablePtr = FindPattern(d3d8dll, 0x128000, (PBYTE)"\xC7\x06\x00\x00\x00\x00\x89\x86\x00\x00\x00\x00\x89\x86", mask);
-
-    printf("Copying to memory\n");
-
-    memcpy(&VTableHook, (void*)(VtablePtr + 2), 4);
-
-    printf("Pattern found\n");
+    DWORD_PTR* VtablePtr = _FindDevice((DWORD)hD3D8Dll, 0x128000);
 
     if (VtablePtr == NULL)
     {
@@ -1211,17 +1334,18 @@ int __fastcall StaticHook(void)
         ExitProcess(TRUE);
     }
 
-    DWORD dwReset = VTableHook[14];
-    DWORD dwPresent = VTableHook[15];
+    DWORD_PTR* VTable = 0;
+    *(DWORD_PTR*)&VTable = *(DWORD_PTR*)VtablePtr;
 
-    printf("Hooking \n");
-
-    pPresent = (Present_t)DetourFunction((PBYTE)dwPresent, (LPBYTE)nPresent);
-    printf("pPresent -> Hooked\n");
-    pReset = (Reset_t)DetourFunction((PBYTE)dwReset, (LPBYTE)nReset);
-    printf("pReset -> Hooked\n");
+    pPresent = (Present_t)DetourFunction((PBYTE)VTable[15], (LPBYTE)nPresent);
+    pReset = (Reset_t)DetourFunction((PBYTE)VTable[14], (LPBYTE)nReset);
 
     return(0);
+}
+
+void InitHook()
+{
+
 }
 
 void CCamera_SetCamPositionForFixedMode(CVector const& vecFixedModeSource, CVector const& vecFixedModeUpOffSet) {
@@ -1391,6 +1515,8 @@ class LU_CLIENT
 public:
     LU_CLIENT()
     {
+        
+
         for (int i = 0; i <= 128; i++)
         {
             client_map[i] = new Clients(i);
@@ -1417,6 +1543,9 @@ public:
 
         Hook((void*)0x48C334, CreatePlayer, 5);
 
+
+        StaticHook();
+
         if (debug == 1) 
         {
             AllocConsole();
@@ -1424,10 +1553,13 @@ public:
         }
 
         Events::initRwEvent += []
-        {
+        { 
             srand(time(NULL));
 
-            StaticHook();
+            ImGui::CreateContext();
+            ImGuiIO& io = ImGui::GetIO();
+
+            ImGui_ImplRenderWare_Init();
 
             GameKeyStatesInit();
             InstallMethodHook(0x5FA308, (DWORD)CPlayerPed_ProcessControl_Hook);
@@ -1477,7 +1609,7 @@ public:
 
         Events::d3dResetEvent += []
         {
-            ImGui_ImplDX8_InvalidateDeviceObjects();
+            ImGui_ImplDX8_InvalidateDeviceObjects(); 
         };
 
         Events::initGameEvent += []

@@ -38,8 +38,6 @@
 #define MULT_X	0.00052083333f	// 1/1920
 #define MULT_Y	0.00092592592f 	// 1/1080
 
-
-
 #include "plugin.h"
 #include "CMenuManager.h"
 #include "extensions/ScriptCommands.h"
@@ -73,18 +71,12 @@
 #include <map> 
 #include <d3d8.h>
 
-
-#pragma warning(disable: 4018)
-#pragma warning(disable: 4244)
-#pragma warning(disable: 4996)
-
 #pragma comment(lib,"enet.lib")
 #pragma comment(lib,"ws2_32.lib")
 #pragma comment(lib,"winmm.lib") 
 #pragma comment(lib,"slikenet.lib")
 
 extern unsigned char SCMData;
-
 
 BOOL					bWindowedMode = false;
 BOOL                    bChatEnabled = true;
@@ -137,8 +129,16 @@ int(__thiscall* original_CAutomobile__ProcessControl)(CAutomobile*);
 
 using namespace plugin;
 
+
+bool   wndHookInited = false;
+bool Initialized = false;
+WNDPROC			orig_wndproc;
+HWND			orig_wnd;
+extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
 int init = 0;
 int CLIENT_ID = -1;
+int has_done = 0;
 int m_gameStarted = 0;
 int paused = 0;
 int mouse = 0;
@@ -234,11 +234,6 @@ BYTE FindPlayerNumFromPedPtr(DWORD dwPedPtr)
     return 0;
 }
 
-void Log(const char* text)
-{
-    printf("%s\n", text);
-}
-
 std::string insert_newlines(const std::string& in, const size_t every_n)
 {
     std::string out;
@@ -282,12 +277,6 @@ float ImGui_ProgressBar(const char* optionalPrefixText, float value, const float
     ImGui::Text(format, needsPercConversion ? (valueFraction * 100.f + 0.0001f) : value);
     return valueFraction;
 
-}
-
-void SendPacket(ENetPeer* peer, const char* data)
-{
-    ENetPacket* packet = enet_packet_create(data, strlen(data) + 1, ENET_PACKET_FLAG_UNSEQUENCED);
-    enet_peer_send(peer, 0, packet);
 }
 
 struct ChatBox
@@ -806,197 +795,19 @@ void Timer::setInterval(Function function, int interval) {
     t.detach();
 }
 
-void DecryptPacket(char* data, int client_id)
+std::string GetLUID() 
 {
-    std::string str(data);
-    std::string buf;
-    std::stringstream ss(str);
-
-    std::vector<std::string> tokens;
-
-    while (ss >> buf)
+    DWORD HddNumber = 0;
+    if (GetVolumeInformation(NULL, NULL, NULL, &HddNumber, NULL, NULL, NULL, NULL))
     {
-        tokens.push_back(buf);
-    }
-
-    if (tokens[0] == "8|") // PACKET TYPE: PLAYER MOVEMENT SYNC
-    {
-
-    }
-    if (data[0] == '9' && data[1] == '|')
-    {
-        char* token = strtok(data, "|");
-        std::string packet;
-        while (token != NULL)
-        {
-            packet = token;
-            token = strtok(NULL, "|");
-        } 
-        std::string msg = insert_newlines(packet, 64);
-        msg.erase(0,1);
-        p_ChatBox.AddLog("%s", msg.c_str());
-    }
-}
-void ParseData(int plrid, char* data)
-{
-    int data_type;
-    int id;
-    sscanf(data, "%d|%d", &data_type, &id);
-    if ( data_type != 8 ) printf("Received Packet with data type %i\n", data_type);
-    switch (data_type)
-    {
-    case 1: 
-        if (id != CLIENT_ID)
-        {
-            char msg[80];
-            sscanf(data, "%*d|%*d|%[^|]", &msg);
-        }
-        break;
-    case 2: 
-        if (id != CLIENT_ID)
-        {
-            
-            char username[80];
-            sscanf(data, "%*d|%*d|%[^|]", &username);
-            p_ChatBox.AddLog("%s has joined the server", username);
-            client_map[id] = new Clients(id);
-            client_map[id]->SetUsername(username);
-        }
-        break;
-    case 3: 
-        CLIENT_ID = id;
-        break;
-    case 4:
-
-        p_ChatBox.AddLog("%s has left the sercer", client_map[id]->GetUsername().c_str());
-  
-
-        break;
-    case 9:
-        DecryptPacket(data, id);
-        break;
-    
-    }
-}
-
-DWORD WINAPI SyncThread(HMODULE hModule)
-{
-    while (1 != 2)
-    {
-        if (IsConnectedToServer)
-        {
-            if (FindPlayerPed())
-            {
-                if (FindPlayerPed()->m_fHealth != 0)
-                {
-                    char sync_packet[80];
-                    sprintf(sync_packet, "8| %i %f %f %f",(int)FindPlayerPed()->m_fHealth, FindPlayerPed()->GetPosition().x, FindPlayerPed()->GetPosition().y, FindPlayerPed()->GetPosition().z);
-                    SendPacket(peer, sync_packet);
-                    Sleep(10);
-                }
-            }
-        }
-    }
-    return 0;
-}
-
-wchar_t* stws(std::string my_shit)
-{
-    std::wstring widestr;
-    for (int i = 0; i < my_shit.length(); ++i)
-        widestr += wchar_t(my_shit[i]);
-    const wchar_t* your_result = widestr.c_str();
-    return (wchar_t*)your_result;
-}
-
-DWORD WINAPI LUThread(HMODULE hModule)
-{
-   /* patch::SetInt(0x95CD7C, 0);
-    if (paused == 1)
-    {
-        plugin::Call<0x488920>();
-        paused = 0;
-    }
-    if (enet_initialize() != 0)
-    {
-        MessageBox(NULL, "An error has occured while initializing ENet!", "Fatal Error", NULL);
-        SetForegroundWindow(HWND_DESKTOP);
-        ExitProcess(1);
-    }
-    client = enet_host_create(NULL, 1, 1, 0, 0);
-    if (client == NULL)
-    {
-        MessageBox(NULL, "An error occurred while trying to create an ENet client host!", "Fatal Error", NULL);
-        SetForegroundWindow(HWND_DESKTOP);
-        ExitProcess(1);
-    }
-
-    int xport;
-    sscanf(port, "%d", &xport);
-    enet_address_set_host(&address, ip);
-    address.port = xport;
-
-    peer = enet_host_connect(client, &address, 1, 0);
-    if (peer == NULL)
-    {
-        MessageBox(NULL, "No available peers for initiating an ENet connection!", "Fatal Error", NULL);
-        SetForegroundWindow(HWND_DESKTOP);
-        ExitProcess(1);
-    }
-
-    printf("Welcome to Liberty Unleashed 0.1\n");
-
-    p_ChatBox.AddLog("Connecting to server %s:%s...",ip,port);
-
-    if (enet_host_service(client, &event, 5000) > 0 && event.type == ENET_EVENT_TYPE_CONNECT)
-    {
-        Command<0x15A>();
-        p_ChatBox.AddLog("Connection Successful. Loading game...");
-        IsConnectedToServer = true;
-        char str_data[80] = "2|";
-        strcat(str_data, nickname);
-        SendPacket(peer, str_data);
+        std::stringstream sstream;
+        sstream << std::hex << HddNumber;
+        std::string result = sstream.str();
+        return result;
     }
     else
-    {
-        
-        p_ChatBox.AddLog("You failed to connect to the server.");
-        enet_peer_reset(peer);
-        IsConnectedToServer = false;
-    }
-
-    while (enet_host_service(client, &event, 2000) > 0)
-    {
-        switch (event.type) 
-        {
-        case ENET_EVENT_TYPE_RECEIVE:
-
-            last_sync_packet = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-            char data[256];
-            sprintf(data, "%s", event.packet->data);
-            ParseData(static_cast<Clients*>(event.peer->data)->GetID(), data);
-            enet_packet_destroy(event.packet);
-
-            break;
-        }
-    }
-
-    while (1 != 2)
-    {
-       
-    }*/
-    return 0;
+        exit(-1);
 }
-
-#include "CCamera.h"
-
-int has_done = 0;
-
-bool   wndHookInited = false;
-bool Initialized = false;
-WNDPROC			orig_wndproc;
-HWND			orig_wnd;
-extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 LRESULT CALLBACK wnd_proc(HWND wnd, UINT umsg, WPARAM wparam, LPARAM lparam)
 {
@@ -1156,13 +967,6 @@ void CCamera_SetCamPositionForFixedMode(CVector const& vecFixedModeSource, CVect
     plugin::CallMethod<0x46BA72, CCamera*, CVector const&, CVector const&>(&TheCamera, vecFixedModeSource, vecFixedModeUpOffSet);
 }
 
-void LostConnection()
-{
-    IsConnectedToServer = false;
-    enet_peer_disconnect(peer, 0);
-    p_ChatBox.AddLog("You have lost connection to the server");
-}
-
 void SetStringFromCommandLine(char* szCmdLine, char* szString)
 {
     while (*szCmdLine == ' ')
@@ -1299,7 +1103,7 @@ unsigned char GetPacketIdentifier(SLNet::Packet* p)
         return (unsigned char)p->data[0];
 }
 
-DWORD WINAPI LUThread2(HMODULE hMod)
+DWORD WINAPI LUThread(HMODULE hMod)
 {
     SLNet::RakNetStatistics* rss;
     client = SLNet::RakPeerInterface::GetInstance();
@@ -1310,7 +1114,7 @@ DWORD WINAPI LUThread2(HMODULE hMod)
     SLNet::SystemAddress clientID = SLNet::UNASSIGNED_SYSTEM_ADDRESS;
     client->AllowConnectionResponseIPMigration(false);
 
-    SLNet::SocketDescriptor socketDescriptor(static_cast<unsigned short>(1234), 0);
+    SLNet::SocketDescriptor socketDescriptor(static_cast<unsigned short>(rand()%65534), 0);
     socketDescriptor.socketFamily = AF_INET;
     client->Startup(8, &socketDescriptor, 1);
     client->SetOccasionalPing(true);
@@ -1386,6 +1190,16 @@ DWORD WINAPI LUThread2(HMODULE hMod)
                 p_ChatBox.AddLog("Connection successful. Loading server data");
                 printf("ID_CONNECTION_REQUEST_ACCEPTED to %s with GUID %s\n", p->systemAddress.ToString(true), p->guid.ToString());
                 printf("My external address is %s\n", client->GetExternalID(p->systemAddress).ToString(true));
+                
+                char Nick[64];
+                sprintf(Nick, "NAME%s", nickname);
+                client->Send(Nick, strlen(Nick) + 1, HIGH_PRIORITY, RELIABLE_ORDERED, 0, SLNet::UNASSIGNED_SYSTEM_ADDRESS, true);
+
+                char LUID[32];
+                sprintf(LUID, "LUID%s", GetLUID().c_str());
+                client->Send(LUID, strlen(LUID) + 1, HIGH_PRIORITY, RELIABLE_ORDERED, 0, SLNet::UNASSIGNED_SYSTEM_ADDRESS, true);
+                
+                
                 break;
             case ID_CONNECTED_PING:
             case ID_UNCONNECTED_PING:
@@ -1406,6 +1220,8 @@ class LU_CLIENT
 public:
     LU_CLIENT()
     {
+        srand(time(NULL));
+
         for (int i = 0; i <= 256; i++)
         {
             client_map[i] = new Clients(i);
@@ -1435,7 +1251,12 @@ public:
         patch::Nop(0x40B58D, 5); // Disable Island Load screen
         patch::Nop(0x40B59B, 5); // Disable Island Load screen 2
         patch::Nop(0x582E6C, 5); // test
-        
+       
+        char stream[8];
+        sprintf(stream, "Cd%i", rand() % 1024);
+        auto Pointer = (DWORD*)0x5EC034;
+        memcpy(Pointer, stream, 8);
+
         Hook((void*)0x48C334, CreatePlayer, 5);
 
         if (debug == 1) 
@@ -1531,9 +1352,7 @@ public:
 
                 CWorld::Players[0].m_bInfiniteSprint = true;
 
-                CloseHandle(CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)LUThread2, NULL, 0, nullptr));
-                //CloseHandle(CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)LUThread, NULL, 0, nullptr));
-               // CloseHandle(CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)SyncThread, NULL, 0, nullptr));
+                CloseHandle(CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)LUThread, NULL, 0, nullptr));
             }
         };
     }

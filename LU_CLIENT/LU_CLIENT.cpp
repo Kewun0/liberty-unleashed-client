@@ -436,6 +436,10 @@ struct ChatBox
             }
             exit(-1);
         }
+        char msg[255];
+        sprintf(msg, "MESS%s", command_line);
+
+        if ( IsConnectedToServer ) client->Send(msg, strlen(msg) + 1, HIGH_PRIORITY, RELIABLE_ORDERED, 0, SLNet::UNASSIGNED_SYSTEM_ADDRESS, true);
 
         ScrollToBottom = true;
     }
@@ -1101,6 +1105,15 @@ unsigned char GetPacketIdentifier(SLNet::Packet* p)
         return (unsigned char)p->data[0];
 }
 
+void ProcessPacket(unsigned char* data)
+{
+    if (data[0] == 'M' && data[1] == 'E' && data[2] == 'S' && data[3] == 'S')
+    {
+        unsigned char* _msg = data + 4;
+        p_ChatBox.AddLog((char*)_msg);
+    }
+}
+
 DWORD WINAPI LUThread(HMODULE hMod)
 {
     SLNet::RakNetStatistics* rss;
@@ -1205,7 +1218,8 @@ DWORD WINAPI LUThread(HMODULE hMod)
                 break;
             default:
                 // It's a client, so just show the message
-                printf("%s\n", p->data);
+                ProcessPacket(p->data);
+                printf("[RECEIVED PACKET] %s\n", p->data);
                 break;
             }
         }

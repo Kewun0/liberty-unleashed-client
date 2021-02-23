@@ -422,7 +422,7 @@ struct ChatBox
 
     void    ExecCommand(const char* command_line)
     {
-        SendPacket(peer, Format("9| %s",command_line).c_str());
+       
 
         if (mouse == 1) { mouse = 0; } 
         
@@ -438,10 +438,13 @@ struct ChatBox
 
         if (Stricmp(command_line, "/q") == 0 || Stricmp(command_line, "/quit") == 0)
         {
-            IsConnectedToServer = false;
-            client->Shutdown(300);
-            SLNet::RakPeerInterface::DestroyInstance(client);
-            Sleep(500);
+            
+            if (IsConnectedToServer) {
+                client->Shutdown(250);
+                SLNet::RakPeerInterface::DestroyInstance(client);
+                Sleep(250);
+                IsConnectedToServer = false;
+            }
             exit(-1);
         }
 
@@ -876,16 +879,6 @@ void ParseData(int plrid, char* data)
     }
 }
 
-void update()
-{
-    ++currentTime;
-    if (currentTime - startTime > delay)
-    {
-        startTime = currentTime;
-        currentTime = 0;
-    }
-}
-
 DWORD WINAPI SyncThread(HMODULE hModule)
 {
     while (1 != 2)
@@ -1170,21 +1163,6 @@ void LostConnection()
     p_ChatBox.AddLog("You have lost connection to the server");
 }
 
-void ProcessSync()
-{
-    unsigned __int64 now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-    
-    int64 test = last_sync_packet - now;
-
-    if (test <= -15000)
-    {
-        if (IsConnectedToServer)
-        {
-            LostConnection();
-        }
-    }
-}
-
 void SetStringFromCommandLine(char* szCmdLine, char* szString)
 {
     while (*szCmdLine == ' ')
@@ -1352,6 +1330,8 @@ DWORD WINAPI LUThread2(HMODULE hMod)
             {
             case ID_DISCONNECTION_NOTIFICATION:
                 // Connection lost normally
+                IsConnectedToServer = false;
+                p_ChatBox.AddLog("You were disconnected from the server");
                 printf("ID_DISCONNECTION_NOTIFICATION\n");
                 break;
             case ID_ALREADY_CONNECTED:
@@ -1371,29 +1351,38 @@ DWORD WINAPI LUThread2(HMODULE hMod)
                 printf("ID_REMOTE_NEW_INCOMING_CONNECTION\n");
                 break;
             case ID_CONNECTION_BANNED: // Banned from this server
-                printf("We are banned from this server.\n");
+                IsConnectedToServer = false;
+                p_ChatBox.AddLog("You are banned from this server");
                 break;
             case ID_CONNECTION_ATTEMPT_FAILED:
-                printf("Connection attempt failed\n");
+                IsConnectedToServer = false;
+                p_ChatBox.AddLog("You failed to connect to the server");
                 break;
             case ID_NO_FREE_INCOMING_CONNECTIONS:
                 // Sorry, the server is full.  I don't do anything here but
                 // A real app should tell the user
+                IsConnectedToServer = false;
+                p_ChatBox.AddLog("Could not connect because the server is full.");
                 printf("ID_NO_FREE_INCOMING_CONNECTIONS\n");
                 break;
 
             case ID_INVALID_PASSWORD:
                 printf("ID_INVALID_PASSWORD\n");
+                IsConnectedToServer = false;
+                p_ChatBox.AddLog("You have entered an invalid password");
                 break;
 
             case ID_CONNECTION_LOST:
                 // Couldn't deliver a reliable packet - i.e. the other system was abnormally
-                // terminated
+                
+                IsConnectedToServer =false;
+                p_ChatBox.AddLog("You have lost connection to the server");
                 printf("ID_CONNECTION_LOST\n");
                 break;
 
             case ID_CONNECTION_REQUEST_ACCEPTED:
-                // This tells the client they have connected
+                IsConnectedToServer = true;
+                Command<0x15A>();
                 p_ChatBox.AddLog("Connection successful. Loading server data");
                 printf("ID_CONNECTION_REQUEST_ACCEPTED to %s with GUID %s\n", p->systemAddress.ToString(true), p->guid.ToString());
                 printf("My external address is %s\n", client->GetExternalID(p->systemAddress).ToString(true));
@@ -1411,7 +1400,7 @@ DWORD WINAPI LUThread2(HMODULE hMod)
     }
     return 1;
 }
-
+ 
 class LU_CLIENT
 {
 public:
@@ -1446,11 +1435,8 @@ public:
         patch::Nop(0x40B58D, 5); // Disable Island Load screen
         patch::Nop(0x40B59B, 5); // Disable Island Load screen 2
         patch::Nop(0x582E6C, 5); // test
-
         
         Hook((void*)0x48C334, CreatePlayer, 5);
-
-       
 
         if (debug == 1) 
         {
@@ -1490,6 +1476,11 @@ public:
             ImGui_ImplRenderWare_ShutDown();
         };
 
+        Events::d3dLostEvent += []
+        {
+            ImGui_ImplRenderWare_ShutDown();
+        };
+
         Events::drawingEvent += []
         {
             RenderChatbox();
@@ -1497,8 +1488,6 @@ public:
 
         Events::processScriptsEvent += []
         {
-            update();
-
             if (KeyPressed(VK_ESCAPE)) paused = 1;
             if (KeyPressed('T')) { if (mouse == 0&&bChatEnabled) { mouse = 1; } }
             
@@ -1510,7 +1499,6 @@ public:
             *(INT*)0x8F4374 = 60;
             *(BYTE*)0x5F2E60 = 1;
 
-            ProcessSync();
 
             if (m_gameStarted == 0)
             {

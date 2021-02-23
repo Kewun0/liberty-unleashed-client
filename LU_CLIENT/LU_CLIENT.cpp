@@ -38,6 +38,8 @@
 #define MULT_X	0.00052083333f	// 1/1920
 #define MULT_Y	0.00092592592f 	// 1/1080
 
+
+
 #include "plugin.h"
 #include "CMenuManager.h"
 #include "extensions/ScriptCommands.h"
@@ -86,6 +88,7 @@ extern unsigned char SCMData;
 
 BOOL					bWindowedMode = false;
 BOOL                    bChatEnabled = true;
+SLNet::RakPeerInterface* client;
 
 extern LRESULT ImGui_ImplRW_WndProcHandler(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -94,7 +97,7 @@ LRESULT __stdcall HookedWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 WNDPROC OldWndProc = nullptr;
 HWND tWindow = nullptr;
 
-ENetHost* client;
+ENetHost* client_enet;
 ENetAddress address; 
 ENetEvent event;
 ENetPeer* peer;
@@ -436,7 +439,8 @@ struct ChatBox
         if (Stricmp(command_line, "/q") == 0 || Stricmp(command_line, "/quit") == 0)
         {
             IsConnectedToServer = false;
-            enet_peer_disconnect(peer, 0);
+            client->Shutdown(300);
+            SLNet::RakPeerInterface::DestroyInstance(client);
             Sleep(500);
             exit(-1);
         }
@@ -914,7 +918,7 @@ wchar_t* stws(std::string my_shit)
 
 DWORD WINAPI LUThread(HMODULE hModule)
 {
-    patch::SetInt(0x95CD7C, 0);
+   /* patch::SetInt(0x95CD7C, 0);
     if (paused == 1)
     {
         plugin::Call<0x488920>();
@@ -987,7 +991,7 @@ DWORD WINAPI LUThread(HMODULE hModule)
     while (1 != 2)
     {
        
-    }
+    }*/
     return 0;
 }
 
@@ -1320,7 +1324,7 @@ unsigned char GetPacketIdentifier(SLNet::Packet* p)
 DWORD WINAPI LUThread2(HMODULE hMod)
 {
     SLNet::RakNetStatistics* rss;
-    SLNet::RakPeerInterface* client = SLNet::RakPeerInterface::GetInstance();
+    client = SLNet::RakPeerInterface::GetInstance();
     SLNet::Packet* p;
 
     unsigned char packetIdentifier;
@@ -1390,6 +1394,7 @@ DWORD WINAPI LUThread2(HMODULE hMod)
 
             case ID_CONNECTION_REQUEST_ACCEPTED:
                 // This tells the client they have connected
+                p_ChatBox.AddLog("Connection successful. Loading server data");
                 printf("ID_CONNECTION_REQUEST_ACCEPTED to %s with GUID %s\n", p->systemAddress.ToString(true), p->guid.ToString());
                 printf("My external address is %s\n", client->GetExternalID(p->systemAddress).ToString(true));
                 break;
@@ -1419,6 +1424,8 @@ public:
 
         InitSettings();
 
+        p_ChatBox.AddLog("Connecting to %s:%s...", ip, port);
+
         patch::SetInt(0x582C1B, 204265);
         patch::SetInt(0x582A8B, 208145899); // Skip Movies
         patch::Nop(0x582C26, 5); // Skip Movies
@@ -1443,7 +1450,7 @@ public:
         
         Hook((void*)0x48C334, CreatePlayer, 5);
 
-        CloseHandle(CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)LUThread2, NULL, 0, nullptr));
+       
 
         if (debug == 1) 
         {
@@ -1536,6 +1543,7 @@ public:
 
                 CWorld::Players[0].m_bInfiniteSprint = true;
 
+                CloseHandle(CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)LUThread2, NULL, 0, nullptr));
                 //CloseHandle(CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)LUThread, NULL, 0, nullptr));
                // CloseHandle(CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)SyncThread, NULL, 0, nullptr));
             }

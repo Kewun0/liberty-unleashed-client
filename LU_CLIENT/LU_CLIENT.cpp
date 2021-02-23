@@ -1038,8 +1038,6 @@ void IsPaused()
     else paused = 0;
 }
 
-CSprite2d mySprite;
-
 void RenderChatbox()
 {
     if (m_gameStarted == 1)

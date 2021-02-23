@@ -106,10 +106,11 @@ void ImGui_ImplRenderWare_RenderDrawData(ImDrawData* draw_data)
 	return;
 }
 
+
 bool ImGui_ImplRenderWare_Init()
 {
 	ImGuiIO& io = ImGui::GetIO();
-	
+	ImFont* font1 = io.Fonts->AddFontFromFileTTF("C:\\WINDOWS\\Fonts\\arial.ttf", 16);
 	io.DisplaySize = ImVec2((float)RsGlobal.maximumWidth, RsGlobal.maximumHeight);
 	printf("GUI | Display size: %f, %f", io.DisplaySize.x, io.DisplaySize.y);
 
@@ -128,7 +129,7 @@ bool ImGui_ImplRenderWare_CreateDeviceObjects()
 	io.Fonts->GetTexDataAsRGBA32(&pxs, &width, &height, &bytes_per_pixel);
 	printf("GUI | Font atlas width: %d, height: %d, depth: %d", width, height, bytes_per_pixel * 8);
 
-	RwImage* font_img = RwImageCreate(width, height, bytes_per_pixel * 8);
+	RwImage* font_img = RwImageCreate(width,height, bytes_per_pixel * 8);
 	RwImageAllocatePixels(font_img);
 
 	RwUInt8* pixels = font_img->cpPixels;

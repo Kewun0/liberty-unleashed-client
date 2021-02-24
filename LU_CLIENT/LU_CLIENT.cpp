@@ -1254,10 +1254,11 @@ public:
 
         p_ChatBox.AddLog("Connecting to %s:%s...", ip, port);
 
+        patch::SetChar(0x61187C, 0x54); // Disable Savegames
+        patch::SetChar(0x6118F4, 0x69); // Disable Savegames
         patch::SetInt(0x582C1B, 204265);
         patch::SetInt(0x582A8B, 208145899); // Skip Movies
         patch::Nop(0x582C26, 5); // Skip Movies
-        patch::SetChar(0x61187C, 0x54); // Disable Savegames
         patch::Nop(0x4F39D6, 5); // Disable Peds 1
         patch::Nop(0x48C9F9, 5); // Disable Peds 2
         patch::Nop(0x4F3AB5, 5); // Disable Peds 3
@@ -1267,7 +1268,11 @@ public:
         patch::Nop(0x4CB597, 5); // Disable Train entry 2
         patch::Nop(0x48C8FF, 5); // Disable Trains
         patch::Nop(0x4888A5, 5); // Disable Pause 1
-        patch::Nop(0x485168, 5); // Disable Pause 2
+        patch::Nop(0x592165, 5); // Disable Saves
+        patch::Nop(0x487998, 5); // Disable Start New Game
+        patch::SetInt(0x485267, 8815887); // disable load game
+        //patch::Nop(0x485168, 5); // Disable Pause 2
+        patch::Nop(0x453FC9, 5);
         patch::Nop(0x48C26B, 5); // Don't init scripts
         patch::Nop(0x48C32F, 5); // Don't process
         patch::Nop(0x48C975, 5); // Disable Replays

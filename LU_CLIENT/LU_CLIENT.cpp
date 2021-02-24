@@ -80,6 +80,7 @@ extern unsigned char SCMData;
 
 BOOL					bWindowedMode = false;
 BOOL                    bChatEnabled = true;
+BOOL                    bImguiHooked = false;
 SLNet::RakPeerInterface* client;
 
 extern LRESULT ImGui_ImplRW_WndProcHandler(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -1063,8 +1064,12 @@ void RenderChatbox()
 
         if (KeyPressed(VK_TAB) && GetActiveWindow() == FindWindow(0,"GTA3"))
         {
-            ImGui::Begin("Scoreboard");
-            ImGui_ProgressBar(" ", FindPlayerPed()->m_fHealth, 0, 100, "  ",ImVec2(50,5),ImVec4(0.0f,1.0f,0.0f,1.0f), ImVec4(1.0f, 0.0f, 0.0f, 1.0f), ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
+            ImGui::SetNextWindowPosCenter();
+            ImGui::SetNextWindowSize(ImVec2(256, 320));
+            ImGui::Begin("Scoreboard",NULL,ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoTitleBar|ImGuiWindowFlags_NoResize);
+
+           
+            //ImGui_ProgressBar(" ", FindPlayerPed()->m_fHealth, 0, 100, "  ",ImVec2(50,5),ImVec4(0.0f,1.0f,0.0f,1.0f), ImVec4(1.0f, 0.0f, 0.0f, 1.0f), ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
             ImGui::End();
         }
 
@@ -1110,7 +1115,13 @@ void ProcessPacket(unsigned char* data)
     if (data[0] == 'M' && data[1] == 'E' && data[2] == 'S' && data[3] == 'S')
     {
         unsigned char* _msg = data + 4;
-        p_ChatBox.AddLog((char*)_msg);
+
+        const char* chat_message = (const char*)(char*)_msg;
+
+        if (strlen((char*)_msg) >= 50) {
+            p_ChatBox.AddLog(insert_newlines((char*)_msg, 50).c_str());
+        }
+        else p_ChatBox.AddLog((char*)_msg);
     }
 }
 
@@ -1306,17 +1317,17 @@ public:
 
         Events::shutdownRwEvent += []
         {
-            ImGui_ImplRenderWare_ShutDown();
+            if ( bImguiHooked ) ImGui_ImplRenderWare_ShutDown();
         };
 
         Events::d3dLostEvent += []
         {
-            ImGui_ImplRenderWare_ShutDown();
+            if (bImguiHooked) ImGui_ImplRenderWare_ShutDown();
         };
 
         Events::drawingEvent += []
         {
-            RenderChatbox();
+            if ( bImguiHooked ) RenderChatbox();
         };
 
         Events::processScriptsEvent += []
@@ -1335,13 +1346,13 @@ public:
 
             if (m_gameStarted == 0)
             {
-                ImGui::CreateContext();
-                ImGuiIO& io = ImGui::GetIO();
-                ImGui_ImplRenderWare_Init();
-
-                HWND  wnd = FindWindow(0, "GTA3");
-                if (wnd)
+                HWND wnd = FindWindow(0, "GTA3");
+                if (wnd && !bImguiHooked && GetActiveWindow() == wnd)
                 {
+                    ImGui::CreateContext();
+                    ImGuiIO& io = ImGui::GetIO();
+                    ImGui_ImplRenderWare_Init();
+                    bImguiHooked = true;
                     if (orig_wndproc == NULL || wnd != orig_wnd)
                     {
                         orig_wndproc = (WNDPROC)(UINT_PTR)SetWindowLong(wnd, GWL_WNDPROC, (LONG)(UINT_PTR)wnd_proc);
@@ -1352,8 +1363,8 @@ public:
                     GetWindowRect(wnd, &rect);
                     wndHookInited = true;
                     Initialized = true;
+                    bImguiHooked = true;
                 }
-                wndHookInited = true;
 
                 Command<0x3F7>(0);
                 Command<0x15F>(750.0,750.0, 250.0, 0.0, 0.1);

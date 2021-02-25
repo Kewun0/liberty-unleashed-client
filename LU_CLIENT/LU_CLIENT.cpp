@@ -1268,6 +1268,7 @@ public:
         patch::Nop(0x4CB597, 5); // Disable Train entry 2
         patch::Nop(0x48C8FF, 5); // Disable Trains
         patch::Nop(0x4888A5, 5); // Disable Pause 1
+        patch::Nop(0x488880, 5); // Disable Pause 2
         patch::Nop(0x592165, 5); // Disable Saves
         patch::Nop(0x487998, 5); // Disable Start New Game
         patch::SetInt(0x485267, 8815887); // disable load game

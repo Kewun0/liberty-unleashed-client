@@ -990,6 +990,22 @@ void SetStringFromCommandLine(char* szCmdLine, char* szString)
 
 int debug = 0;
 
+BOOL IsWindowMode = TRUE;
+WINDOWPLACEMENT wpc;
+LONG HWNDStyle = 0;
+LONG HWNDStyleEx = 0;
+
+void FullScreenSwitch()
+{
+    HWND HWNDWindow = FindWindow(NULL, "GTA3");
+
+    SetWindowLong(HWNDWindow, GWL_STYLE, HWNDStyle);
+    SetWindowLong(HWNDWindow, GWL_EXSTYLE, HWNDStyleEx);
+    ShowWindow(HWNDWindow, SW_SHOWNORMAL);
+    SetWindowPlacement(HWNDWindow, &wpc);
+    
+}
+
 void InitSettings()
 {
     char* szCmdLine = GetCommandLine();
@@ -1209,6 +1225,7 @@ DWORD WINAPI LUThread(HMODULE hMod)
             case ID_CONNECTION_REQUEST_ACCEPTED:
                 IsConnectedToServer = true;
                 Command<0x15A>();
+                Command<0x1B4>(0, true);
                 p_ChatBox.AddLog("Connection successful. Loading server data");
                 printf("ID_CONNECTION_REQUEST_ACCEPTED to %s with GUID %s\n", p->systemAddress.ToString(true), p->guid.ToString());
                 printf("My external address is %s\n", client->GetExternalID(p->systemAddress).ToString(true));
@@ -1237,7 +1254,7 @@ DWORD WINAPI LUThread(HMODULE hMod)
     }
     return 1;
 }
- 
+
 class LU_CLIENT
 {
 public:
@@ -1256,30 +1273,34 @@ public:
 
         patch::SetChar(0x61187C, 0x54); // Disable Savegames
         patch::SetChar(0x6118F4, 0x69); // Disable Savegames
-        patch::SetInt(0x582C1B, 204265);
-        patch::SetInt(0x582A8B, 208145899); // Skip Movies
-        patch::Nop(0x582C26, 5); // Skip Movies
+        patch::SetInt(0x582C1B, 204265); // Skip Movies 1
+        patch::SetInt(0x582A8B, 208145899); // Skip Movies 2
+        patch::Nop(0x582C26, 5); // Skip Movies 3
         patch::Nop(0x4F39D6, 5); // Disable Peds 1
         patch::Nop(0x48C9F9, 5); // Disable Peds 2
         patch::Nop(0x4F3AB5, 5); // Disable Peds 3
         patch::Nop(0x48CA03, 5); // Prevent removing far away cars
         patch::Nop(0x48C9FE, 5); // Don't generate roadblocks
-        patch::Nop(0x4D443D, 5); // Disable Train entry
+        patch::Nop(0x4D443D, 5); // Disable Train entry 1
         patch::Nop(0x4CB597, 5); // Disable Train entry 2
         patch::Nop(0x48C8FF, 5); // Disable Trains
-        patch::Nop(0x4888A5, 5); // Disable Pause 1
-        patch::Nop(0x488880, 5); // Disable Pause 2
+        patch::Nop(0x4888A5, 5); // Enable Sync when paused 1
+        patch::Nop(0x488880, 5); // Enable Sync when paused 2
         patch::Nop(0x592165, 5); // Disable Saves
         patch::Nop(0x487998, 5); // Disable Start New Game
-        patch::SetInt(0x485267, 8815887); // disable load game
-        //patch::Nop(0x485168, 5); // Disable Pause 2
-        patch::Nop(0x453FC9, 5);
+        patch::SetInt(0x485267, 8815887); // Disable load game
+        patch::Nop(0x453FC9, 5); // Disable CLEO
+        patch::Nop(0x590DC0, 5); // Disable CLEO 2
+        patch::Nop(0x439400, 5); // Disable CLEO 3
+        patch::Nop(0x439440, 5); // Disable CLEO 4
         patch::Nop(0x48C26B, 5); // Don't init scripts
         patch::Nop(0x48C32F, 5); // Don't process
         patch::Nop(0x48C975, 5); // Disable Replays
         patch::Nop(0x40B58D, 5); // Disable Island Load screen
         patch::Nop(0x40B59B, 5); // Disable Island Load screen 2
-        patch::Nop(0x582E6C, 5); // test
+        patch::Nop(0x582E6C, 5); // Disable Island Load screen 3
+        patch::Nop(0x4882CA, 5); // Unblock resolution
+        *(INT*)0x8F4374 = 9999; // Infinite FPS (speed up loading)
        
         char stream[8];
         sprintf(stream, "Cd%i", rand() % 1024);
@@ -1293,7 +1314,7 @@ public:
             AllocConsole();
             freopen("CONOUT$", "w", stdout);
         }
-        
+
         Events::initRwEvent += []
         { 
             srand(time(NULL));
@@ -1326,18 +1347,14 @@ public:
             if ( bImguiHooked ) ImGui_ImplRenderWare_ShutDown();
         };
 
-        Events::d3dLostEvent += []
-        {
-            if (bImguiHooked) ImGui_ImplRenderWare_ShutDown();
-        };
-
         Events::drawingEvent += []
         {
-            if ( bImguiHooked ) RenderChatbox();
+            if ( bImguiHooked && GetActiveWindow() == FindWindowA(NULL,"GTA3")) RenderChatbox();
         };
 
         Events::processScriptsEvent += []
         {
+            if (IsDebuggerPresent()) exit(-1);
             if (KeyPressed(VK_ESCAPE)) paused = 1;
             if (KeyPressed('T')) { if (mouse == 0&&bChatEnabled) { mouse = 1; } }
             
@@ -1346,12 +1363,11 @@ public:
                 FindPlayerPed()->m_nPedType = 1;
             }
 
-            *(INT*)0x8F4374 = 60;
             *(BYTE*)0x5F2E60 = 1;
-
-
+            
             if (m_gameStarted == 0)
             {
+                *(INT*)0x8F4374 = 30;
                 HWND wnd = FindWindow(0, "GTA3");
                 if (wnd && !bImguiHooked && GetActiveWindow() == wnd)
                 {
@@ -1371,16 +1387,15 @@ public:
                     Initialized = true;
                     bImguiHooked = true;
                 }
-
                 Command<0x3F7>(0);
                 Command<0x15F>(750.0,750.0, 250.0, 0.0, 0.1);
                 Command<0x160>(685.25,600.0,230.0, 2);
-
+                Command<0x1B4>(0, false);
                 m_gameStarted = 1;
                 IsConnectedToServer = false;
 
                 CWorld::Players[0].m_bInfiniteSprint = true;
-
+                
                 CloseHandle(CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)LUThread, NULL, 0, nullptr));
             }
         };

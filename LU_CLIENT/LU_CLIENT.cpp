@@ -1,5 +1,4 @@
 #define _WINSOCKAPI_ 
-#define CINTERFACE
 #define	KEY_INCAR_TURRETLR			0
 #define	KEY_INCAR_TURRETUD			1
 #define	KEY_INCAR_RADIO				2
@@ -71,7 +70,11 @@
 #include <tlhelp32.h>
 #include <windowsx.h>
 #include <map> 
+#include <ole2.h>
+#include <olectl.h>
 #include <d3d8.h>
+#include <gdiplus.h>
+#include <time.h>
 
 #pragma comment(lib,"enet.lib")
 #pragma comment(lib,"ws2_32.lib")
@@ -219,6 +222,8 @@ CPed* FindLocalPlayer() { return CWorld::Players[0].m_pPed; }
 
 int iPlayerNumber = 1;
 
+
+
 BYTE FindPlayerNumFromPedPtr(DWORD dwPedPtr)
 {
     CPlayerPed* ped = (CPlayerPed*)dwPedPtr;
@@ -257,6 +262,82 @@ std::string insert_newlines(const std::string& in, const size_t every_n)
         out.push_back(in[i]);
     }
     return out;
+}
+bool saveBitmap(LPCSTR filename, HBITMAP bmp, HPALETTE pal)
+{
+    bool result = false;
+    PICTDESC pd;
+
+    pd.cbSizeofstruct = sizeof(PICTDESC);
+    pd.picType = PICTYPE_BITMAP;
+    pd.bmp.hbitmap = bmp;
+    pd.bmp.hpal = pal;
+
+    LPPICTURE picture;
+    HRESULT res = OleCreatePictureIndirect(&pd, IID_IPicture, false,
+        reinterpret_cast<void**>(&picture));
+
+    if (!SUCCEEDED(res))
+        return false;
+
+    LPSTREAM stream;
+    res = CreateStreamOnHGlobal(0, true, &stream);
+
+    if (!SUCCEEDED(res))
+    {
+        picture->Release();
+        return false;
+    }
+
+    LONG bytes_streamed;
+    res = picture->SaveAsFile(stream, true, &bytes_streamed);
+
+    HANDLE file = CreateFile(filename, GENERIC_WRITE, FILE_SHARE_READ, 0,
+        CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
+
+    if (!SUCCEEDED(res) || !file)
+    {
+        stream->Release();
+        picture->Release();
+        return false;
+    }
+
+    HGLOBAL mem = 0;
+    GetHGlobalFromStream(stream, &mem);
+    LPVOID data = GlobalLock(mem);
+
+    DWORD bytes_written;
+
+    result = !!WriteFile(file, data, bytes_streamed, &bytes_written, 0);
+    result &= (bytes_written == static_cast<DWORD>(bytes_streamed));
+
+    GlobalUnlock(mem);
+    CloseHandle(file);
+
+    stream->Release();
+    picture->Release();
+
+    return result;
+}
+bool screenCapturePart(int x, int y, int w, int h, LPCSTR fname) {
+    HDC hdcSource = GetDC(NULL);
+    HDC hdcMemory = CreateCompatibleDC(hdcSource);
+
+    int capX = GetDeviceCaps(hdcSource, HORZRES);
+    int capY = GetDeviceCaps(hdcSource, VERTRES);
+
+    HBITMAP hBitmap = CreateCompatibleBitmap(hdcSource, w, h);
+    HBITMAP hBitmapOld = (HBITMAP)SelectObject(hdcMemory, hBitmap);
+
+    BitBlt(hdcMemory, 0, 0, w, h, hdcSource, x, y, SRCCOPY);
+    hBitmap = (HBITMAP)SelectObject(hdcMemory, hBitmapOld);
+
+    DeleteDC(hdcSource);
+    DeleteDC(hdcMemory);
+
+    HPALETTE hpal = NULL;
+    if (saveBitmap(fname, hBitmap, hpal)) return true;
+    return false;
 }
 
 float ImGui_ProgressBar(const char* optionalPrefixText, float value, const float minValue, const float maxValue, const char* format, const ImVec2& sizeOfBarWithoutTextInPixels, const ImVec4& colorLeft, const ImVec4& colorRight, const ImVec4& colorBorder) {
@@ -1139,11 +1220,6 @@ unsigned char GetPacketIdentifier(SLNet::Packet* p)
 
 void ProcessPacket(unsigned char* data)
 {
-    if (data[0] == 'W' && data[1] == 'E' && data[2] == 'P')
-    {
-       
-       // if ( FindPlayerPed() ) FindPlayerPed()->GiveWeapon((eWeaponType)atoi(tokens[0].c_str()), (eWeaponType)atoi(tokens[1].c_str()));
-    }
     if (data[0] == 'F' && data[1] == 'P' && data[2] == 'S')
     {
         unsigned char* _fps = data + 3;
@@ -1171,13 +1247,12 @@ void onGiveWeaponPacket(SLNet::Packet* p)
     bsIn.Read(rs);
     char data[16];
     sprintf(data, "%s", rs.C_String());
-    printf("%s\n",rs.C_String());
     char* pch;
     pch = strtok(data, " ");
     int wep = atoi(pch);
     pch = strtok(NULL, " ");
     int ammo = atoi(pch);
-    FindPlayerPed()->GiveWeapon((eWeaponType)wep, ammo);
+    if ( FindPlayerPed() ) FindPlayerPed()->GiveWeapon((eWeaponType)wep, ammo);
 }
 
 DWORD WINAPI LUThread(HMODULE hMod)
@@ -1254,8 +1329,6 @@ DWORD WINAPI LUThread(HMODULE hMod)
                 Command<0x15A>();
                 Command<0x1B4>(0, true);
                 p_ChatBox.AddLog("Connection successful. Loading server data");
-                printf("ID_CONNECTION_REQUEST_ACCEPTED to %s with GUID %s\n", p->systemAddress.ToString(true), p->guid.ToString());
-                printf("My external address is %s\n", client->GetExternalID(p->systemAddress).ToString(true));
                 char Nick[64];
                 sprintf(Nick, "NAME%s", nickname);
                 client->Send(Nick, strlen(Nick) + 1, HIGH_PRIORITY, RELIABLE_ORDERED, 0, SLNet::UNASSIGNED_SYSTEM_ADDRESS, true);
@@ -1267,9 +1340,7 @@ DWORD WINAPI LUThread(HMODULE hMod)
 
                 break;
             case ID_LUMSG1:
-
                 onGiveWeaponPacket(p);
-
                 break;
             case ID_UNCONNECTED_PING:
                 printf("Ping from %s\n", p->systemAddress.ToString(true));
@@ -1282,17 +1353,6 @@ DWORD WINAPI LUThread(HMODULE hMod)
         }
     }
     return 1;
-}
-
-void ChangeSkin(int modelID)
-{   
-    if (FindPlayerPed())
-    {
-        CStreaming::RequestModel(modelID, 2);
-        FindPlayerPed()->DeleteRwObject();
-        FindPlayerPed()->m_nModelIndex = -1;
-        FindPlayerPed()->SetModelIndex(modelID);
-    }
 }
 
 class LU_CLIENT
@@ -1397,15 +1457,18 @@ public:
             if (IsDebuggerPresent()) exit(-1);
             if (KeyPressed(VK_ESCAPE)) paused = 1;
             if (KeyPressed('T')) { if (mouse == 0&&bChatEnabled) { mouse = 1; } }
+            if (KeyPressed(VK_F12))
+            {
+                char filename[256];
+                sprintf(filename, "screen%i.bmp", rand() % 1000);
+                screenCapturePart(1, 1, RsGlobal.maximumWidth, RsGlobal.maximumHeight, filename);
+                p_ChatBox.AddLog("Screenshot saved as %s", filename);
+                Sleep(100);
+            }
             
             if (FindPlayerPed())
             {
                 FindPlayerPed()->m_nPedType = 1;
-            }
-
-            if (KeyPressed(VK_F12))
-            {
-                ChangeSkin(2);
             }
 
             *(BYTE*)0x5F2E60 = 1;

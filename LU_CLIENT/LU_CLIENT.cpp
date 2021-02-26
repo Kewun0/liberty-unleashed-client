@@ -71,7 +71,6 @@
 #include <map> 
 #include <ole2.h>
 #include <olectl.h>
-#include <d3d8.h>
 #include <gdiplus.h>
 #include <time.h>
 
@@ -103,8 +102,6 @@ DWORD dwStackFrame = 0;
 DWORD dwCurPlayerActor = 0;
 DWORD BarOldStateBlock = 0;
 DWORD BarNewStateBlock = 0;
-
-D3DMATRIX matView;
 
 int64 last_sync_packet = 0;
  

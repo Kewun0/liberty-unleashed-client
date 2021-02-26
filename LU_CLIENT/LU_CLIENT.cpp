@@ -61,7 +61,6 @@
 
 #include <stdio.h>
 #include <thread>
-#include <enet/enet.h>
 #include <detours.h>
 #include <Psapi.h>
 #include <io.h>
@@ -76,7 +75,6 @@
 #include <gdiplus.h>
 #include <time.h>
 
-#pragma comment(lib,"enet.lib")
 #pragma comment(lib,"ws2_32.lib")
 #pragma comment(lib,"winmm.lib") 
 #pragma comment(lib,"slikenet.lib")
@@ -94,11 +92,6 @@ LRESULT __stdcall HookedWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
 WNDPROC OldWndProc = nullptr;
 HWND tWindow = nullptr;
-
-ENetHost* client_enet;
-ENetAddress address; 
-ENetEvent event;
-ENetPeer* peer;
  
 char nickname[64]; 
 char ip[64]; 

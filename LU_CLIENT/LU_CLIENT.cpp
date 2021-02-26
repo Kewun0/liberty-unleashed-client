@@ -231,16 +231,6 @@ BYTE FindPlayerNumFromPedPtr(DWORD dwPedPtr)
     return 0;
 }
 
-void SetSkin(int ID)
-{
-    CStreaming::RequestModel(ID, 0);
-    CStreaming::LoadAllRequestedModels(false);
-    if (CWorld::Players[0].m_pPed)
-    {
-        CWorld::Players[0].m_pPed->SetModelIndex(ID);
-    }
-}
-
 std::string insert_newlines(const std::string& in, const size_t every_n)
 {
     std::string out;
@@ -253,6 +243,7 @@ std::string insert_newlines(const std::string& in, const size_t every_n)
     }
     return out;
 }
+
 bool saveBitmap(LPCSTR filename, HBITMAP bmp, HPALETTE pal)
 {
     bool result = false;
@@ -309,6 +300,7 @@ bool saveBitmap(LPCSTR filename, HBITMAP bmp, HPALETTE pal)
 
     return result;
 }
+
 bool screenCapturePart(int x, int y, int w, int h, LPCSTR fname) {
     HDC hdcSource = GetDC(NULL);
     HDC hdcMemory = CreateCompatibleDC(hdcSource);
@@ -378,12 +370,6 @@ struct ChatBox
         ClearLog();
         memset(InputBuf, 0, sizeof(InputBuf));
         HistoryPos = -1;
-
-        Commands.push_back("HELP");
-        Commands.push_back("HISTORY");
-        Commands.push_back("CLEAR");
-        Commands.push_back("CLASSIFY");
-
         AutoScroll = true;
         ScrollToBottom = false;
         AddLog("Welcome to Liberty Unleashed 0.1");
@@ -652,7 +638,6 @@ void InstallHook(DWORD dwInstallAddress, DWORD dwHookFunction, DWORD dwHookStora
 
 void GameKeyStatesInit()
 {
-
     memset(&SavedKeys, 0, sizeof(SavedKeys));
     memset(&gcsRemotePlayerKeys, 0, sizeof(gcsRemotePlayerKeys));
 }
@@ -676,7 +661,6 @@ void GameSetRemotePlayerKeys(int iPlayer)
 }
 GTA_CONTROLSET* GameGetInternalKeys()
 {
-
     return pGcsInternalKeys;
 }
 
@@ -777,7 +761,7 @@ void CPlayerPed_SetKeys(int iPlayerID, WORD wKeys)
     wKeys >>= 1; // 4
     pPlayerKeys->wKeys1[KEY_INCAR_TURRETUD] = (wKeys & 1) ? 0x80 : 0x00;
     wKeys >>= 1; // 5
-    pPlayerKeys->wKeys1[KEY_ONFOOT_CROUCH] = (wKeys & 0) ? 0xFF : 0x00;
+    pPlayerKeys->wKeys1[KEY_ONFOOT_CROUCH] = (wKeys & 0) ? 0xFF : 0x00; // stolen from vc, probably will require a change later
     wKeys >>= 1; // 6
     pPlayerKeys->wKeys1[KEY_ONFOOT_FIRE] = (wKeys & 1) ? 0xFF : 0x00;
     wKeys >>= 1; // 7

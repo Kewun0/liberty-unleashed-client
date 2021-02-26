@@ -44,6 +44,8 @@
 #include "CWorld.h"
 #include "ePedPieceTypes.h"
 #include "CCamera.h"
+#include "CStreaming.h"
+#include "CStreamingInfo.h"
 #include "CGame.h"
 #include "CHud.h"
 #include "CTxdStore.h"
@@ -231,8 +233,17 @@ BYTE FindPlayerNumFromPedPtr(DWORD dwPedPtr)
             }
         }
     }
-
     return 0;
+}
+
+void SetSkin(int ID)
+{
+    CStreaming::RequestModel(ID, 0);
+    CStreaming::LoadAllRequestedModels(false);
+    if (CWorld::Players[0].m_pPed)
+    {
+        CWorld::Players[0].m_pPed->SetModelIndex(ID);
+    }
 }
 
 std::string insert_newlines(const std::string& in, const size_t every_n)
@@ -1128,6 +1139,17 @@ unsigned char GetPacketIdentifier(SLNet::Packet* p)
 
 void ProcessPacket(unsigned char* data)
 {
+    if (data[0] == 'W' && data[1] == 'E' && data[2] == 'P')
+    {
+       
+       // if ( FindPlayerPed() ) FindPlayerPed()->GiveWeapon((eWeaponType)atoi(tokens[0].c_str()), (eWeaponType)atoi(tokens[1].c_str()));
+    }
+    if (data[0] == 'F' && data[1] == 'P' && data[2] == 'S')
+    {
+        unsigned char* _fps = data + 3;
+        int limit = atoi((const char*)_fps);
+        *(INT*)0x8F4374 = limit;
+    }
     if (data[0] == 'M' && data[1] == 'E' && data[2] == 'S' && data[3] == 'S')
     {
         unsigned char* _msg = data + 4;
@@ -1141,22 +1163,35 @@ void ProcessPacket(unsigned char* data)
     }
 }
 
+void onGiveWeaponPacket(SLNet::Packet* p)
+{
+    SLNet::RakString rs;
+    SLNet::BitStream bsIn(p->data, p->length, false);
+    bsIn.IgnoreBytes(sizeof(SLNet::MessageID));
+    bsIn.Read(rs);
+    char data[16];
+    sprintf(data, "%s", rs.C_String());
+    printf("%s\n",rs.C_String());
+    char* pch;
+    pch = strtok(data, " ");
+    int wep = atoi(pch);
+    pch = strtok(NULL, " ");
+    int ammo = atoi(pch);
+    FindPlayerPed()->GiveWeapon((eWeaponType)wep, ammo);
+}
+
 DWORD WINAPI LUThread(HMODULE hMod)
 {
     SLNet::RakNetStatistics* rss;
     client = SLNet::RakPeerInterface::GetInstance();
     SLNet::Packet* p;
-
     unsigned char packetIdentifier;
-
     SLNet::SystemAddress clientID = SLNet::UNASSIGNED_SYSTEM_ADDRESS;
     client->AllowConnectionResponseIPMigration(false);
-
     SLNet::SocketDescriptor socketDescriptor(static_cast<unsigned short>(rand()%65534), 0);
     socketDescriptor.socketFamily = AF_INET;
     client->Startup(8, &socketDescriptor, 1);
     client->SetOccasionalPing(true);
-
     SLNet::ConnectionAttemptResult car = client->Connect(ip, static_cast<unsigned short>(atoi(port)),0,0);
     RakAssert(car == SLNet::CONNECTION_ATTEMPT_STARTED);
     for (;;)
@@ -1164,20 +1199,16 @@ DWORD WINAPI LUThread(HMODULE hMod)
         Sleep(30);
         for (p = client->Receive(); p; client->DeallocatePacket(p), p = client->Receive())
         {
-            // We got a packet, get the identifier with our handy function
             packetIdentifier = GetPacketIdentifier(p);
-
-            // Check if this is a network message packet
             switch (packetIdentifier)
             {
             case ID_DISCONNECTION_NOTIFICATION:
-                // Connection lost normally
                 IsConnectedToServer = false;
                 p_ChatBox.AddLog("You were disconnected from the server");
                 printf("ID_DISCONNECTION_NOTIFICATION\n");
                 break;
             case ID_ALREADY_CONNECTED:
-                // Connection lost normally
+                p_ChatBox.AddLog("You are already connected to the server");
                 printf("ID_ALREADY_CONNECTED with guid %" PRINTF_64_BIT_MODIFIER "u\n", p->guid.g);
                 break;
             case ID_INCOMPATIBLE_PROTOCOL_VERSION:
@@ -1201,8 +1232,6 @@ DWORD WINAPI LUThread(HMODULE hMod)
                 p_ChatBox.AddLog("You failed to connect to the server");
                 break;
             case ID_NO_FREE_INCOMING_CONNECTIONS:
-                // Sorry, the server is full.  I don't do anything here but
-                // A real app should tell the user
                 IsConnectedToServer = false;
                 p_ChatBox.AddLog("Could not connect because the server is full.");
                 printf("ID_NO_FREE_INCOMING_CONNECTIONS\n");
@@ -1214,9 +1243,7 @@ DWORD WINAPI LUThread(HMODULE hMod)
                 p_ChatBox.AddLog("You have entered an invalid password");
                 break;
 
-            case ID_CONNECTION_LOST:
-                // Couldn't deliver a reliable packet - i.e. the other system was abnormally
-                
+            case ID_CONNECTION_LOST: 
                 IsConnectedToServer =false;
                 p_ChatBox.AddLog("You have lost connection to the server");
                 printf("ID_CONNECTION_LOST\n");
@@ -1229,30 +1256,43 @@ DWORD WINAPI LUThread(HMODULE hMod)
                 p_ChatBox.AddLog("Connection successful. Loading server data");
                 printf("ID_CONNECTION_REQUEST_ACCEPTED to %s with GUID %s\n", p->systemAddress.ToString(true), p->guid.ToString());
                 printf("My external address is %s\n", client->GetExternalID(p->systemAddress).ToString(true));
-                
                 char Nick[64];
                 sprintf(Nick, "NAME%s", nickname);
                 client->Send(Nick, strlen(Nick) + 1, HIGH_PRIORITY, RELIABLE_ORDERED, 0, SLNet::UNASSIGNED_SYSTEM_ADDRESS, true);
-
                 char LUID[32];
                 sprintf(LUID, "LUID%s", GetLUID().c_str());
                 client->Send(LUID, strlen(LUID) + 1, HIGH_PRIORITY, RELIABLE_ORDERED, 0, SLNet::UNASSIGNED_SYSTEM_ADDRESS, true);
-                
-                
                 break;
             case ID_CONNECTED_PING:
+
+                break;
+            case ID_LUMSG1:
+
+                onGiveWeaponPacket(p);
+
+                break;
             case ID_UNCONNECTED_PING:
                 printf("Ping from %s\n", p->systemAddress.ToString(true));
                 break;
             default:
-                // It's a client, so just show the message
+                printf("[PACKET] %s\n", p->data);
                 ProcessPacket(p->data);
-                printf("[RECEIVED PACKET] %s\n", p->data);
                 break;
             }
         }
     }
     return 1;
+}
+
+void ChangeSkin(int modelID)
+{   
+    if (FindPlayerPed())
+    {
+        CStreaming::RequestModel(modelID, 2);
+        FindPlayerPed()->DeleteRwObject();
+        FindPlayerPed()->m_nModelIndex = -1;
+        FindPlayerPed()->SetModelIndex(modelID);
+    }
 }
 
 class LU_CLIENT
@@ -1363,6 +1403,11 @@ public:
                 FindPlayerPed()->m_nPedType = 1;
             }
 
+            if (KeyPressed(VK_F12))
+            {
+                ChangeSkin(2);
+            }
+
             *(BYTE*)0x5F2E60 = 1;
             
             if (m_gameStarted == 0)
@@ -1391,6 +1436,7 @@ public:
                 Command<0x15F>(750.0,750.0, 250.0, 0.0, 0.1);
                 Command<0x160>(685.25,600.0,230.0, 2);
                 Command<0x1B4>(0, false);
+                
                 m_gameStarted = 1;
                 IsConnectedToServer = false;
 

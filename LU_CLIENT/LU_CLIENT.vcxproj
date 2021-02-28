@@ -15,14 +15,13 @@
     <IgnoreWarnCompileDuplicatedFilename>true</IgnoreWarnCompileDuplicatedFilename>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>LU_CLIENT</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.18362.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='GTA3 Release|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <CharacterSet>MultiByte</CharacterSet>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v141_xp</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='GTA3 zDebug|Win32'" Label="Configuration">
@@ -46,8 +45,8 @@
     <IntDir>$(ProjectDir).obj\GTA3\Release\</IntDir>
     <TargetName>lu</TargetName>
     <TargetExt>.dll</TargetExt>
-    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);B:\DXSDK\include;D:\Usars\Kewun\source\repos\LU_CLIENT\LU_CLIENT\includes</IncludePath>
-    <LibraryPath>B:\DXSDK\lib;D:\Usars\Kewun\source\repos\LU_CLIENT\LU_CLIENT\libs;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(VC_IncludePath);$(WindowsSdk_71A_IncludePath);D:\Usars\Kewun\source\repos\LU_CLIENT\LU_CLIENT\includes</IncludePath>
+    <LibraryPath>D:\Usars\Kewun\source\repos\LU_CLIENT\LU_CLIENT\libs;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='GTA3 zDebug|Win32'">
     <OutDir>D:\GTA III Snow\</OutDir>

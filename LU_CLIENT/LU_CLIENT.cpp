@@ -1,4 +1,5 @@
 #define _WINSOCKAPI_ 
+#define CINTERFACE
 #define	KEY_INCAR_TURRETLR			0
 #define	KEY_INCAR_TURRETUD			1
 #define	KEY_INCAR_RADIO				2
@@ -71,11 +72,11 @@
 #include <map> 
 #include <ole2.h>
 #include <olectl.h>
-#include <gdiplus.h>
 #include <time.h>
 
 #pragma comment(lib,"ws2_32.lib")
 #pragma comment(lib,"winmm.lib") 
+#pragma comment(lib,"psapi.lib") 
 #pragma comment(lib,"slikenet.lib")
 
 extern unsigned char SCMData;
@@ -266,20 +267,23 @@ bool saveBitmap(LPCSTR filename, HBITMAP bmp, HPALETTE pal)
 
     if (!SUCCEEDED(res))
     {
-        picture->Release();
+       // IUnknown_Release_Proxy(picture);
+
+        picture->lpVtbl->Release(picture);
+
         return false;
     }
 
     LONG bytes_streamed;
-    res = picture->SaveAsFile(stream, true, &bytes_streamed);
+    res = picture->lpVtbl->SaveAsFile(picture,stream, true, &bytes_streamed);
 
     HANDLE file = CreateFile(filename, GENERIC_WRITE, FILE_SHARE_READ, 0,
         CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
 
     if (!SUCCEEDED(res) || !file)
     {
-        stream->Release();
-        picture->Release();
+        stream->lpVtbl->Release(stream);
+        picture->lpVtbl->Release(picture);
         return false;
     }
 
@@ -295,8 +299,8 @@ bool saveBitmap(LPCSTR filename, HBITMAP bmp, HPALETTE pal)
     GlobalUnlock(mem);
     CloseHandle(file);
 
-    stream->Release();
-    picture->Release();
+    stream->lpVtbl->Release(stream);
+    picture->lpVtbl->Release(picture);
 
     return result;
 }

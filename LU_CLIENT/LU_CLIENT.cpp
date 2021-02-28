@@ -1144,7 +1144,7 @@ void RenderChatbox()
         
         p_ChatBox.Draw("Chatbox", NULL);
 
-        if (KeyPressed(VK_TAB) && GetActiveWindow() == FindWindow(0,"GTA3"))
+       /* if (KeyPressed(VK_TAB) && GetActiveWindow() == FindWindow(0,"GTA3"))
         {
             ImGui::SetNextWindowPosCenter();
             ImGui::SetNextWindowSize(ImVec2(256, 320));
@@ -1153,7 +1153,7 @@ void RenderChatbox()
            
             //ImGui_ProgressBar(" ", FindPlayerPed()->m_fHealth, 0, 100, "  ",ImVec2(50,5),ImVec4(0.0f,1.0f,0.0f,1.0f), ImVec4(1.0f, 0.0f, 0.0f, 1.0f), ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
             ImGui::End();
-        }
+        }*/
 
         ImGui::EndFrame();
         ImGui::Render();

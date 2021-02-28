@@ -1229,6 +1229,20 @@ void onGiveWeaponPacket(SLNet::Packet* p)
     if ( FindPlayerPed() ) FindPlayerPed()->GiveWeapon((eWeaponType)wep, ammo);
 }
 
+void SendOnFootSync()
+{ 
+    if (FindPlayerPed() && IsConnectedToServer == 1 && !FindPlayerPed()->m_pVehicle)
+    {
+        printf("SEx\n");
+        SLNet::BitStream bsOut;
+        bsOut.Write((SLNet::MessageID)ID_LUMSG2);
+        char package[255];
+        sprintf(package, "%f %f %f %f %f %f %i", FindPlayerPed()->GetPosition().x, FindPlayerPed()->GetPosition().y, FindPlayerPed()->GetPosition().z,FindPlayerPed()->GetHeading(),FindPlayerPed()->m_fHealth,FindPlayerPed()->m_fArmour,FindPlayerPed()->m_nWepSlot);
+        bsOut.Write(package);
+        client->Send(&bsOut, HIGH_PRIORITY, RELIABLE_ORDERED, 0, SLNet::UNASSIGNED_SYSTEM_ADDRESS, true);
+    }
+}
+
 DWORD WINAPI LUThread(HMODULE hMod)
 {
     SLNet::RakNetStatistics* rss;
@@ -1246,6 +1260,7 @@ DWORD WINAPI LUThread(HMODULE hMod)
     for (;;)
     {
         Sleep(30);
+        SendOnFootSync();
         for (p = client->Receive(); p; client->DeallocatePacket(p), p = client->Receive())
         {
             packetIdentifier = GetPacketIdentifier(p);
@@ -1262,7 +1277,7 @@ DWORD WINAPI LUThread(HMODULE hMod)
                 break;
             case ID_INCOMPATIBLE_PROTOCOL_VERSION:
                 printf("ID_INCOMPATIBLE_PROTOCOL_VERSION\n");
-                break;
+                break; 
             case ID_REMOTE_DISCONNECTION_NOTIFICATION: // Server telling the clients of another client disconnecting gracefully.  You can manually broadcast this in a peer to peer enviroment if you want.
                 printf("ID_REMOTE_DISCONNECTION_NOTIFICATION\n");
                 break;
@@ -1379,7 +1394,7 @@ public:
         char stream[8];
         sprintf(stream, "Cd%i", rand() % 1024);
         auto Pointer = (DWORD*)0x5EC034;
-        memcpy(Pointer, stream, 8);
+        memcpy(Pointer, stream, 5);
 
         Hook((void*)0x48C334, CreatePlayer, 5);
 

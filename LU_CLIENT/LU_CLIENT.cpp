@@ -97,6 +97,10 @@ HWND tWindow = nullptr;
 char nickname[64];
 char ip[64];
 char port[16];
+char wTitle[64];
+char wRand[9];
+
+std::string window_title = "Liberty Unleashed: Reborn";
 
 DWORD myPlayer = 0;
 DWORD FHCore = 0;
@@ -922,7 +926,7 @@ LRESULT CALLBACK wnd_proc(HWND wnd, UINT umsg, WPARAM wparam, LPARAM lparam)
         rect.right = lr.x;
         rect.bottom = lr.y;
 
-        if (GetActiveWindow() == FindWindow(0, "GTA3"))
+        if (GetActiveWindow() == FindWindow(0, wTitle))
             ClipCursor(&rect);
         break;
     case WM_KEYUP:
@@ -1068,7 +1072,7 @@ LONG HWNDStyleEx = 0;
 
 void FullScreenSwitch()
 {
-    HWND HWNDWindow = FindWindow(NULL, "GTA3");
+    HWND HWNDWindow = FindWindow(NULL, wTitle);
 
     SetWindowLong(HWNDWindow, GWL_STYLE, HWNDStyle);
     SetWindowLong(HWNDWindow, GWL_EXSTYLE, HWNDStyleEx);
@@ -1231,6 +1235,7 @@ void onGiveWeaponPacket(RakNet::Packet* p)
     int wep = atoi(pch);
     pch = strtok(NULL, " ");
     int ammo = atoi(pch);
+    
     if (FindPlayerPed()) FindPlayerPed()->GiveWeapon((eWeaponType)wep, ammo);
 }
 
@@ -1238,7 +1243,6 @@ void SendOnFootSync()
 {
     if (FindPlayerPed() && IsConnectedToServer == 1 && !FindPlayerPed()->m_pVehicle)
     {
-        printf("SEx\n");
         RakNet::BitStream bsOut;
         bsOut.Write((RakNet::MessageID)ID_LUMSG2);
         char package[255];
@@ -1349,6 +1353,17 @@ DWORD WINAPI LUThread(HMODULE hMod)
     return 1;
 }
 
+void hex_string(char str[], int length)
+{
+    char hex_characters[] = { '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F' };
+    int i;
+    for (i = 0; i < length; i++)
+    {
+        str[i] = hex_characters[rand() % 16];
+    }
+    str[length] = 0;
+}
+
 class LU_CLIENT
 {
 public:
@@ -1363,8 +1378,9 @@ public:
 
         InitSettings();
 
-        p_ChatBox.AddLog("Connecting to %s:%s...", ip, port);
-
+        char stream[8];
+        sprintf(stream, "%i%i%i%i%i%i%i", rand() % 10, rand() % 10, rand() % 10, rand() % 10, rand() % 10, rand() % 10, rand() % 10);
+        memcpy((void*)0x5EC034, stream, strlen(stream)); // custom cdstream
         patch::SetChar(0x61187C, 0x54); // Disable Savegames
         patch::SetChar(0x6118F4, 0x69); // Disable Savegames
         patch::SetInt(0x582C1B, 204265); // Skip Movies 1
@@ -1396,11 +1412,6 @@ public:
         patch::Nop(0x4882CA, 5); // Unblock resolution
         *(INT*)0x8F4374 = 9999; // Infinite FPS (speed up loading)
 
-        char stream[8];
-        sprintf(stream, "Cd%i", rand() % 1024);
-        auto Pointer = (DWORD*)0x5EC034;
-        memcpy(Pointer, stream, 5);
-
         Hook((void*)0x48C334, CreatePlayer, 5);
 
         if (debug == 1)
@@ -1409,12 +1420,14 @@ public:
             freopen("CONOUT$", "w", stdout);
         }
 
+        p_ChatBox.AddLog("Connecting to %s:%s...", ip, port);
+
         Events::initRwEvent += []
         {
+            hex_string(wRand, 8);
+            sprintf(wTitle, "Liberty Unleashed: Reborn [%s]",wRand);
+            SetWindowTextA(FindWindowA(NULL, "GTA3"), wTitle);
             srand(time(NULL));
-            CPad::GetPad(0)->NewKeyState.enter = 255;
-            CPad::GetPad(0)->NewKeyState.enter = 0;
-            CPad::GetPad(0)->NewMouseControllerState.lmb = 255;
             GameKeyStatesInit();
             InstallMethodHook(0x5FA308, (DWORD)CPlayerPed_ProcessControl_Hook);
 
@@ -1443,7 +1456,7 @@ public:
 
         Events::drawingEvent += []
         {
-            if (bImguiHooked && GetActiveWindow() == FindWindowA(NULL, "GTA3")) RenderChatbox();
+            if (bImguiHooked && GetActiveWindow() == FindWindowA(NULL, wTitle)) RenderChatbox();
         };
 
         Events::processScriptsEvent += []
@@ -1465,12 +1478,13 @@ public:
                 FindPlayerPed()->m_nPedType = 1;
             }
 
-            *(BYTE*)0x5F2E60 = 1;
+            *(BYTE*)0x5F2E60 = 1; // Framelimiter Patch
+            *(BYTE*)0x5F2E5C = 0; // Disable V-Sync
 
             if (m_gameStarted == 0)
             {
                 *(INT*)0x8F4374 = 30;
-                HWND wnd = FindWindow(0, "GTA3");
+                HWND wnd = FindWindow(0, wTitle);
                 if (wnd && !bImguiHooked && GetActiveWindow() == wnd)
                 {
                     ImGui::CreateContext();

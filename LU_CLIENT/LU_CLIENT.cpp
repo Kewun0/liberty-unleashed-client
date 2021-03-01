@@ -381,7 +381,7 @@ struct ChatBox
         HistoryPos = -1;
         AutoScroll = true;
         ScrollToBottom = false;
-        AddLog("Welcome to Liberty Unleashed 0.1");
+        AddLog("Welcome to Liberty Unleashed Reborn");
     }
     ~ChatBox()
     {
@@ -1143,26 +1143,7 @@ void RenderChatbox()
         ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
         ImGui::SetNextWindowSize(ImVec2(512, 256));
 
-        auto io = ImGui::GetIO();
-
-        if (mouse == 1)
-        {
-            io.MouseDrawCursor = true;
-        }
-        else { io.MouseDrawCursor = false; }
-
         p_ChatBox.Draw("Chatbox", NULL);
-
-        /* if (KeyPressed(VK_TAB) && GetActiveWindow() == FindWindow(0,"GTA3"))
-         {
-             ImGui::SetNextWindowPosCenter();
-             ImGui::SetNextWindowSize(ImVec2(256, 320));
-             ImGui::Begin("Scoreboard",NULL,ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoTitleBar|ImGuiWindowFlags_NoResize);
-
-
-             //ImGui_ProgressBar(" ", FindPlayerPed()->m_fHealth, 0, 100, "  ",ImVec2(50,5),ImVec4(0.0f,1.0f,0.0f,1.0f), ImVec4(1.0f, 0.0f, 0.0f, 1.0f), ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
-             ImGui::End();
-         }*/
 
         ImGui::EndFrame();
         ImGui::Render();
@@ -1219,6 +1200,31 @@ void ProcessPacket(unsigned char* data)
             p_ChatBox.AddLog(insert_newlines((char*)_msg, 50).c_str());
         }
         else p_ChatBox.AddLog((char*)_msg);
+    }
+}
+
+void onFunctionPacket(RakNet::Packet* p)
+{
+    RakNet::RakString rs;
+    RakNet::BitStream bsIn(p->data, p->length, false);
+    bsIn.IgnoreBytes(sizeof(RakNet::MessageID));
+    bsIn.Read(rs);
+    char data[16];
+    sprintf(data, "%s", rs.C_String());
+    char* pch;
+    pch = strtok(data, " ");
+    int function_id = atoi(pch);
+
+    if (function_id == 0)
+    {
+        pch = strtok(NULL, " ");
+        float x = atof(pch);
+        pch = strtok(NULL, " ");
+        float y = atof(pch);
+        pch = strtok(NULL, " ");
+        float z = atof(pch);
+
+        if (FindPlayerPed()) FindPlayerPed()->SetPosition(x, y, z);
     }
 }
 
@@ -1340,6 +1346,9 @@ DWORD WINAPI LUThread(HMODULE hMod)
             case ID_LUMSG1:
                 onGiveWeaponPacket(p);
                 break;
+            case ID_LUMSG2:
+                onFunctionPacket(p);
+                break;
             case ID_UNCONNECTED_PING:
                 printf("Ping from %s\n", p->systemAddress.ToString(true));
                 break;
@@ -1363,7 +1372,12 @@ void hex_string(char str[], int length)
     }
     str[length] = 0;
 }
-
+void DisableCheats(char str[]) {
+    __asm
+    {
+        nop
+    }
+}
 class LU_CLIENT
 {
 public:
@@ -1378,11 +1392,8 @@ public:
 
         InitSettings();
 
-        char stream[8];
-        sprintf(stream, "%i%i%i%i%i%i%i", rand() % 10, rand() % 10, rand() % 10, rand() % 10, rand() % 10, rand() % 10, rand() % 10);
-        memcpy((void*)0x5EC034, stream, strlen(stream)); // custom cdstream
-        patch::SetChar(0x61187C, 0x54); // Disable Savegames
-        patch::SetChar(0x6118F4, 0x69); // Disable Savegames
+        patch::SetChar(0x61187C, 0x54); // Disable Savegames 1
+        patch::SetChar(0x6118F4, 0x69); // Disable Savegames 2
         patch::SetInt(0x582C1B, 204265); // Skip Movies 1
         patch::SetInt(0x582A8B, 208145899); // Skip Movies 2
         patch::Nop(0x582C26, 5); // Skip Movies 3
@@ -1411,8 +1422,25 @@ public:
         patch::Nop(0x582E6C, 5); // Disable Island Load screen 3
         patch::Nop(0x4882CA, 5); // Unblock resolution
         *(INT*)0x8F4374 = 9999; // Infinite FPS (speed up loading)
-
         Hook((void*)0x48C334, CreatePlayer, 5);
+        patch::Nop(0x492492, 5); // Disable Cheats Start
+        patch::Nop(0x4924AF, 5); //
+        patch::Nop(0x4924CC, 5); //
+        patch::Nop(0x4924E9, 5); //
+        patch::Nop(0x492506, 5); //
+        patch::Nop(0x492523, 5); //
+        patch::Nop(0x492540, 5); //
+        patch::Nop(0x49255D, 5); //
+        patch::Nop(0x49257A, 5); //
+        patch::Nop(0x492597, 5); //
+        patch::Nop(0x4925B4, 5); //
+        patch::Nop(0x4925D1, 5); //
+        patch::Nop(0x4925EE, 5); //
+        patch::Nop(0x49260B, 5); //
+        patch::Nop(0x4926B9, 5); //
+        patch::Nop(0x4926D6, 5); //
+        patch::Nop(0x4926F3, 5); //
+        patch::Nop(0x49260B, 5); // Disable Cheats End
 
         if (debug == 1)
         {

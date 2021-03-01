@@ -1,18 +1,3 @@
-/*
- *  Original work: Copyright (c) 2014, Oculus VR, Inc.
- *  All rights reserved.
- *
- *  This source code is licensed under the BSD-style license found in the
- *  RakNet License.txt file in the licenses directory of this source tree. An additional grant 
- *  of patent rights can be found in the RakNet Patents.txt file in the same directory.
- *
- *
- *  Modified work: Copyright (c) 2017, SLikeSoft UG (haftungsbeschränkt)
- *
- *  This source code was modified by SLikeSoft. Modifications are licensed under the MIT-style
- *  license found in the license.txt file in the root directory of this source tree.
- */
-
 #ifndef __VARIABLE_DELTA_SERIALIZER_H
 #define __VARIABLE_DELTA_SERIALIZER_H
 
@@ -23,7 +8,7 @@
 #include "PacketPriority.h"
 #include "DS_OrderedList.h"
 
-namespace SLNet
+namespace RakNet
 {
 
 /// \brief Class to compare memory values of variables in a current state to a prior state
@@ -34,15 +19,15 @@ namespace SLNet
 /// 1. Call BeginUnreliableAckedSerialize(), BeginUniqueSerialize(), or BeginIdenticalSerialize(). In the case of Replica3, this would be in the Serialize() call<BR>
 /// 2. For each variable of the type in step 1, call Serialize(). The same variables must be serialized every tick()<BR>
 /// 3. Call EndSerialize()<BR>
-/// 4. Repeat step 1 for each of the other categories of how to send varaibles<BR>
-///<BR>
-/// On the receiver:<BR>
-///<BR>
-/// 1. Call BeginDeserialize(). In the case of Replica3, this would be in the Deserialize() call<BR>
-/// 2. Call DeserializeVariable() for each variable, in the same order as was Serialized()<BR>
-/// 3. Call EndSerialize()<BR>
+/// 4. Repeat step 1 for each of the other categories of how to send varaibles
+///
+/// On the receiver:
+///
+/// 1. Call BeginDeserialize(). In the case of Replica3, this would be in the Deserialize() call
+/// 2. Call DeserializeVariable() for each variable, in the same order as was Serialized()
+/// 3. Call EndSerialize()
 /// \sa The ReplicaManager3 sample
-class RAK_DLL_EXPORT VariableDeltaSerializer
+class VariableDeltaSerializer
 {
 protected:
 	struct RemoteSystemVariableHistory;
@@ -141,9 +126,9 @@ public:
 	/// 
 	/// uint32_t msgNumber;
 	/// memcpy(&msgNumber, packet->data+1, 4);
-	/// DataStructures::List<Replica3*> replicaListOut;
+	/// DataStructures::Multilist<ML_STACK, Replica3*> replicaListOut;
 	/// replicaManager.GetReplicasCreatedByMe(replicaListOut);
-	/// unsigned int idx;
+	/// DataStructures::DefaultIndexType idx;
 	/// for (idx=0; idx < replicaListOut.GetSize(); idx++)
 	/// {
 	/// 	((SampleReplica*)replicaListOut[idx])->NotifyReplicaOfMessageDeliveryStatus(packet->guid,msgNumber, packet->data[0]==ID_SND_RECEIPT_ACKED);
@@ -249,7 +234,7 @@ protected:
 	DataStructures::MemoryPool<ChangedVariablesList> updatedVariablesMemoryPool;
 
 	bool didComparisonThisTick;
-	SLNet::BitStream identicalSerializationBs;
+	RakNet::BitStream identicalSerializationBs;
 
 	void FreeVarsAssociatedWithReceipt(RakNetGUID guid, uint32_t receiptId);
 	void DirtyAndFreeVarsAssociatedWithReceipt(RakNetGUID guid, uint32_t receiptId);

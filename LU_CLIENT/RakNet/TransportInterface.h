@@ -1,34 +1,21 @@
-/*
- *  Original work: Copyright (c) 2014, Oculus VR, Inc.
- *  All rights reserved.
- *
- *  This source code is licensed under the BSD-style license found in the
- *  RakNet License.txt file in the licenses directory of this source tree. An additional grant 
- *  of patent rights can be found in the RakNet Patents.txt file in the same directory.
- *
- *
- *  Modified work: Copyright (c) 2017, SLikeSoft UG (haftungsbeschränkt)
- *
- *  This source code was modified by SLikeSoft. Modifications are licensed under the MIT-style
- *  license found in the license.txt file in the root directory of this source tree.
- */
-
 /// \file
 /// \brief Contains TransportInterface from which you can derive custom transport providers for ConsoleServer.
 ///
-
+/// This file is part of RakNet Copyright 2003 Jenkins Software LLC
+///
+/// Usage of RakNet is subject to the appropriate license agreement.
 
 
 #ifndef __TRANSPORT_INTERFACE_H
 #define __TRANSPORT_INTERFACE_H
 
-#include "types.h"
+#include "RakNetTypes.h"
 #include "Export.h"
-#include "memoryoverride.h"
+#include "RakMemoryOverride.h"
 
 #define REMOTE_MAX_TEXT_INPUT 2048
 
-namespace SLNet
+namespace RakNet
 {
 
 class CommandParserInterface;
@@ -90,7 +77,7 @@ public:
 protected:
 };
 
-} // namespace SLNet
+} // namespace RakNet
 
 #endif
 

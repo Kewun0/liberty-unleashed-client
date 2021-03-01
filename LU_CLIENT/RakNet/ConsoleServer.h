@@ -1,21 +1,9 @@
-/*
- *  Original work: Copyright (c) 2014, Oculus VR, Inc.
- *  All rights reserved.
- *
- *  This source code is licensed under the BSD-style license found in the
- *  RakNet License.txt file in the licenses directory of this source tree. An additional grant 
- *  of patent rights can be found in the RakNet Patents.txt file in the same directory.
- *
- *
- *  Modified work: Copyright (c) 2017, SLikeSoft UG (haftungsbeschränkt)
- *
- *  This source code was modified by SLikeSoft. Modifications are licensed under the MIT-style
- *  license found in the license.txt file in the root directory of this source tree.
- */
-
 /// \file ConsoleServer.h
 /// \brief Contains ConsoleServer , used to plugin to your game to accept remote console-based connections
 ///
+/// This file is part of RakNet Copyright 2003 Jenkins Software LLC
+///
+/// Usage of RakNet is subject to the appropriate license agreement.
 
 
 #include "NativeFeatureIncludes.h"
@@ -24,12 +12,12 @@
 #ifndef __CONSOLE_SERVER_H
 #define __CONSOLE_SERVER_H
 
-#include "memoryoverride.h"
+#include "RakMemoryOverride.h"
 #include "DS_List.h"
-#include "types.h"
+#include "RakNetTypes.h"
 #include "Export.h"
 
-namespace SLNet
+namespace RakNet
 {
 /// Forward declarations
 class TransportInterface;
@@ -82,7 +70,7 @@ protected:
 	char *prompt;
 };
 
-} // namespace SLNet
+} // namespace RakNet
 
 #endif
 

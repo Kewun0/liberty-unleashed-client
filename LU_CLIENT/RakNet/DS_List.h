@@ -1,32 +1,20 @@
-/*
- *  Original work: Copyright (c) 2014, Oculus VR, Inc.
- *  All rights reserved.
- *
- *  This source code is licensed under the BSD-style license found in the
- *  RakNet License.txt file in the licenses directory of this source tree. An additional grant 
- *  of patent rights can be found in the RakNet Patents.txt file in the same directory.
- *
- *
- *  Modified work: Copyright (c) 2017, SLikeSoft UG (haftungsbeschränkt)
- *
- *  This source code was modified by SLikeSoft. Modifications are licensed under the MIT-style
- *  license found in the license.txt file in the root directory of this source tree.
- */
-
 /// \file DS_List.h
 /// \internal
 /// \brief Array based list.  
 /// \details Usually the Queue class is used instead, since it has all the same functionality and is only worse at random access.
 ///
+/// This file is part of RakNet Copyright 2003 Jenkins Software LLC
+///
+/// Usage of RakNet is subject to the appropriate license agreement.
 
 
 #ifndef __LIST_H
 #define __LIST_H 
 
-#include "assert.h"
+#include "RakAssert.h"
 #include <string.h> // memmove
 #include "Export.h"
-#include "memoryoverride.h"
+#include "RakMemoryOverride.h"
 
 /// Maximum unsigned long
 static const unsigned int MAX_UNSIGNED_LONG = 4294967295U;
@@ -149,7 +137,7 @@ namespace DataStructures
 		List<list_type>::~List()
 	{
 		if (allocation_size>0)
-			SLNet::OP_DELETE_ARRAY(listArray, _FILE_AND_LINE_);
+			RakNet::OP_DELETE_ARRAY(listArray, _FILE_AND_LINE_);
 	}
 
 
@@ -165,7 +153,7 @@ namespace DataStructures
 		}
 		else
 		{
-			listArray = SLNet::OP_NEW_ARRAY<list_type >( original_copy.list_size , _FILE_AND_LINE_ );
+			listArray = RakNet::OP_NEW_ARRAY<list_type >( original_copy.list_size , _FILE_AND_LINE_ );
 
 			for ( unsigned int counter = 0; counter < original_copy.list_size; ++counter )
 				listArray[ counter ] = original_copy.listArray[ counter ];
@@ -194,7 +182,7 @@ namespace DataStructures
 
 			else
 			{
-				listArray = SLNet::OP_NEW_ARRAY<list_type >( original_copy.list_size , _FILE_AND_LINE_ );
+				listArray = RakNet::OP_NEW_ARRAY<list_type >( original_copy.list_size , _FILE_AND_LINE_ );
 
 				for ( unsigned int counter = 0; counter < original_copy.list_size; ++counter )
 					listArray[ counter ] = original_copy.listArray[ counter ];
@@ -265,7 +253,7 @@ namespace DataStructures
 			else
 				allocation_size *= 2;
 
-			new_array = SLNet::OP_NEW_ARRAY<list_type >( allocation_size , file, line );
+			new_array = RakNet::OP_NEW_ARRAY<list_type >( allocation_size , file, line );
 
 			// copy old array over
 			for ( unsigned int counter = 0; counter < list_size; ++counter )
@@ -275,7 +263,7 @@ namespace DataStructures
 			//memcpy(new_array, listArray, list_size*sizeof(list_type));
 
 			// set old array to point to the newly allocated and twice as large array
-			SLNet::OP_DELETE_ARRAY(listArray, file, line);
+			RakNet::OP_DELETE_ARRAY(listArray, file, line);
 
 			listArray = new_array;
 		}
@@ -310,7 +298,7 @@ namespace DataStructures
 			else
 				allocation_size *= 2;
 
-			new_array = SLNet::OP_NEW_ARRAY<list_type >( allocation_size , file, line );
+			new_array = RakNet::OP_NEW_ARRAY<list_type >( allocation_size , file, line );
 
 			if (listArray)
 			{
@@ -322,7 +310,7 @@ namespace DataStructures
 				//memcpy(new_array, listArray, list_size*sizeof(list_type));
 
 				// set old array to point to the newly allocated and twice as large array
-					SLNet::OP_DELETE_ARRAY(listArray, file, line);
+				RakNet::OP_DELETE_ARRAY(listArray, file, line);
 			}
 			
 			listArray = new_array;
@@ -350,7 +338,7 @@ namespace DataStructures
 				list_type * new_array;
 				allocation_size = position + 1;
 
-				new_array = SLNet::OP_NEW_ARRAY<list_type >( allocation_size , file, line );
+				new_array = RakNet::OP_NEW_ARRAY<list_type >( allocation_size , file, line );
 
 				// copy old array over
 
@@ -361,7 +349,7 @@ namespace DataStructures
 				//memcpy(new_array, listArray, list_size*sizeof(list_type));
 
 				// set old array to point to the newly allocated array
-				SLNet::OP_DELETE_ARRAY(listArray, file, line);
+				RakNet::OP_DELETE_ARRAY(listArray, file, line);
 
 				listArray = new_array;
 			}
@@ -460,7 +448,7 @@ namespace DataStructures
 
 		if (allocation_size>512 || doNotDeallocateSmallBlocks==false)
 		{
-			SLNet::OP_DELETE_ARRAY(listArray, file, line);
+			RakNet::OP_DELETE_ARRAY(listArray, file, line);
 			allocation_size = 0;
 			listArray = 0;
 		}
@@ -475,7 +463,7 @@ namespace DataStructures
 		if ( allocation_size == 0 )
 			return ;
 
-		new_array = SLNet::OP_NEW_ARRAY<list_type >( allocation_size , file, line );
+		new_array = RakNet::OP_NEW_ARRAY<list_type >( allocation_size , file, line );
 
 		// copy old array over
 		for ( unsigned int counter = 0; counter < list_size; ++counter )
@@ -485,7 +473,7 @@ namespace DataStructures
 		//memcpy(new_array, listArray, list_size*sizeof(list_type));
 
 		// set old array to point to the newly allocated array
-		SLNet::OP_DELETE_ARRAY(listArray, file, line);
+		RakNet::OP_DELETE_ARRAY(listArray, file, line);
 
 		listArray = new_array;
 	}
@@ -506,7 +494,7 @@ namespace DataStructures
 
 			allocation_size=amountToAllocate;
 
-			new_array = SLNet::OP_NEW_ARRAY< list_type >( allocation_size , file, line );
+			new_array = RakNet::OP_NEW_ARRAY< list_type >( allocation_size , file, line );
 
 			if (listArray)
 			{
@@ -518,7 +506,7 @@ namespace DataStructures
 				//memcpy(new_array, listArray, list_size*sizeof(list_type));
 
 				// set old array to point to the newly allocated and twice as large array
-				SLNet::OP_DELETE_ARRAY(listArray, file, line);
+				RakNet::OP_DELETE_ARRAY(listArray, file, line);
 			}
 
 			listArray = new_array;

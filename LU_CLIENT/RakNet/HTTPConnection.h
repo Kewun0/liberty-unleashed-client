@@ -1,36 +1,33 @@
-/*
- *  Original work: Copyright (c) 2014, Oculus VR, Inc.
- *  All rights reserved.
- *
- *  This source code is licensed under the BSD-style license found in the
- *  RakNet License.txt file in the licenses directory of this source tree. An additional grant 
- *  of patent rights can be found in the RakNet Patents.txt file in the same directory.
- *
- *
- *  Modified work: Copyright (c) 2017, SLikeSoft UG (haftungsbeschränkt)
- *
- *  This source code was modified by SLikeSoft. Modifications are licensed under the MIT-style
- *  license found in the license.txt file in the root directory of this source tree.
- */
-
 /// \file HTTPConnection.h
 /// \brief Contains HTTPConnection, used to communicate with web servers
 ///
-
+/// This file is part of RakNet Copyright 2008 Kevin Jenkins.
+///
+/// Usage of RakNet is subject to the appropriate license agreement.
+/// Creative Commons Licensees are subject to the
+/// license found at
+/// http://creativecommons.org/licenses/by-nc/2.5/
+/// Single application licensees are subject to the license found at
+/// http://www.jenkinssoftware.com/SingleApplicationLicense.html
+/// Custom license users are subject to the terms therein.
+/// GPL license users are subject to the GNU General Public
+/// License as published by the Free
+/// Software Foundation; either version 2 of the License, or (at your
+/// option) any later version.
 
 #include "NativeFeatureIncludes.h"
-#if _RAKNET_SUPPORT_HTTPConnection==1 && _RAKNET_SUPPORT_TCPInterface==1
+#if _RAKNET_SUPPORT_HTTPConnection==1
 
 #ifndef __HTTP_CONNECTION
 #define __HTTP_CONNECTION
 
 #include "Export.h"
-#include "string.h"
-#include "memoryoverride.h"
-#include "types.h"
+#include "RakString.h"
+#include "RakMemoryOverride.h"
+#include "RakNetTypes.h"
 #include "DS_Queue.h"
 
-namespace SLNet
+namespace RakNet
 {
 /// Forward declarations
 class TCPInterface;
@@ -43,7 +40,6 @@ struct SystemAddress;
 /// This class will handle connecting and reconnecting as necessary.
 ///
 /// Note that only one Post() can be handled at a time. 
-/// \deprecated, use HTTPConnection2
 class RAK_DLL_EXPORT HTTPConnection
 {
 public:
@@ -61,21 +57,17 @@ public:
     /// HTTP only allows one request at a time per connection
     ///
 	/// \pre IsBusy()==false
-    /// \param path the path on the remote server you want to POST to. For example "index.html"
+    /// \param path the path on the remote server you want to POST to. For example "mywebpage/index.html"
     /// \param data A NULL terminated string to submit to the server
 	/// \param contentType "Content-Type:" passed to post.
     void Post(const char *path, const char *data, const char *_contentType="application/x-www-form-urlencoded");
-
-	/// Get a file from a webserver
-	/// \param path the path on the remote server you want to GET from. For example "index.html"
-	void Get(const char *path);
     
 	/// Is there a Read result ready?
 	bool HasRead(void) const;
 
     /// Get one result from the server
 	/// \pre HasResult must return true
-	SLNet::RakString Read(void);
+    RakNet::RakString Read(void);
 
 	/// Call periodically to do time-based updates
 	void Update(void);
@@ -110,12 +102,12 @@ public:
 
 		operator int () const { return code; }
 
-		SLNet::RakString data;
+		RakNet::RakString data;
 		int code;  // ResponseCodes
     };
 
     /// Queued events of failed exchanges with the HTTP server
-    bool HasBadResponse(int *code, SLNet::RakString *data);
+    bool HasBadResponse(int *code, RakNet::RakString *data);
 
 	/// Returns false if the connection is not doing anything else
 	bool IsBusy(void) const;
@@ -123,21 +115,20 @@ public:
 	/// \internal
 	int GetState(void) const;
 
-	struct OutgoingCommand
+	struct OutgoingPost
 	{
-		SLNet::RakString remotePath;
-		SLNet::RakString data;
-		SLNet::RakString contentType;
-		bool isPost;
+		RakNet::RakString remotePath;
+		RakNet::RakString data;
+		RakNet::RakString contentType;
 	};
 
-	 DataStructures::Queue<OutgoingCommand> outgoingCommand;
-	 OutgoingCommand currentProcessingCommand;
+	 DataStructures::Queue<OutgoingPost> outgoingPosts;
+	 OutgoingPost currentProcessingRequest;
 
 private:
     SystemAddress server;
     TCPInterface *tcp;
-	SLNet::RakString host;
+	RakNet::RakString host;
 	unsigned short port;
 	DataStructures::Queue<BadResponse> badResponses;
 
@@ -150,8 +141,8 @@ private:
 		CS_PROCESSING,
 	} connectionState;
 
-	SLNet::RakString incomingData;
-	DataStructures::Queue<SLNet::RakString> results;
+	RakNet::RakString incomingData;
+	DataStructures::Queue<RakNet::RakString> results;
 
 	void CloseConnection();
 	
@@ -163,7 +154,7 @@ private:
 		RAK_HTTP_REQUEST_SENT,
 		RAK_HTTP_IDLE } state;
 
-    SLNet::RakString outgoing, incoming, path, contentType;
+    RakNet::RakString outgoing, incoming, path, contentType;
     void Process(Packet *packet); // the workhorse
     
     // this helps check the various status lists in TCPInterface
@@ -173,7 +164,7 @@ private:
 
 };
 
-} // namespace SLNet
+} // namespace RakNet
 
 #endif
 

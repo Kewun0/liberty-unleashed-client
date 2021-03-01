@@ -1,21 +1,8 @@
-/*
- *  Original work: Copyright (c) 2014, Oculus VR, Inc.
- *  All rights reserved.
- *
- *  This source code is licensed under the BSD-style license found in the
- *  RakNet License.txt file in the licenses directory of this source tree. An additional grant 
- *  of patent rights can be found in the RakNet Patents.txt file in the same directory.
- *
- *
- *  Modified work: Copyright (c) 2016-2018, SLikeSoft UG (haftungsbeschränkt)
- *
- *  This source code was modified by SLikeSoft. Modifications are licensed under the MIT-style
- *  license found in the license.txt file in the root directory of this source tree.
- */
-
 /// \file DS_BPlusTree.h
 ///
-
+/// This file is part of RakNet Copyright 2003 Jenkins Software LLC
+///
+/// Usage of RakNet is subject to the appropriate license agreement.
 
 #ifndef __B_PLUS_TREE_CPP
 #define __B_PLUS_TREE_CPP
@@ -38,7 +25,7 @@
 #pragma warning( push )
 #endif
 
-#include "memoryoverride.h"
+#include "RakMemoryOverride.h"
 
 /// The namespace DataStructures was only added to avoid compiler errors for commonly named data structures
 /// As these data structures are stand-alone, you can use them outside of RakNet for your own projects if you wish.
@@ -607,8 +594,8 @@ namespace DataStructures
 					// the first key is the middle key.  Remove it from the page and push it to the parent
 					returnAction->action=ReturnAction::PUSH_KEY_TO_PARENT;
 					returnAction->key1=newPage->keys[0];
-					for (int j=0; j < destIndex-1; j++)
-						newPage->keys[j]=newPage->keys[j+1];
+					for (int i=0; i < destIndex-1; i++)
+						newPage->keys[i]=newPage->keys[i+1];
 					
 				}
 				cur->size=order/2;
@@ -635,8 +622,8 @@ namespace DataStructures
 					// the first key is the middle key.  Remove it from the page and push it to the parent
 					returnAction->action=ReturnAction::PUSH_KEY_TO_PARENT;
 					returnAction->key1=newPage->keys[0];
-					for (int j=0; j < destIndex-1; j++)
-						newPage->keys[j]=newPage->keys[j+1];
+					for (int i=0; i < destIndex-1; i++)
+						newPage->keys[i]=newPage->keys[i+1];
 				}
 				cur->size=(order+1)/2-1;
 				if (cur->size)
@@ -900,7 +887,7 @@ namespace DataStructures
 	template<class KeyType, class DataType, int order>
 		unsigned BPlusTree<KeyType, DataType, order>::Size(void) const
 	{
-		unsigned int count=0;
+		int count=0;
 		DataStructures::Page<KeyType, DataType, order> *cur = GetListHead();
 		while (cur)
 		{
@@ -923,7 +910,10 @@ namespace DataStructures
 		lowerBound=0;
 		index = page->size/2;
 
-		for(;;)
+#ifdef _MSC_VER
+#pragma warning( disable : 4127 ) // warning C4127: conditional expression is constant
+#endif
+		while (1)
 		{
 			if (key==page->keys[index])
 			{
@@ -1002,8 +992,7 @@ namespace DataStructures
 		int i;
 		RAKNET_DEBUG_PRINTF("%i] SELF=%p\n", index+1, leaf);
 		for (i=0; i < leaf->size; i++)
-			// #med - need to adjust printf-format specified based on the actual datatype
-			RAKNET_DEBUG_PRINTF(" %i. %p\n", i+1, leaf->data[i]);
+			RAKNET_DEBUG_PRINTF(" %i. %i\n", i+1, leaf->data[i]);
 	}
 	template<class KeyType, class DataType, int order>
 		void BPlusTree<KeyType, DataType, order>::PrintLeaves(void)
@@ -1152,6 +1141,6 @@ void main(void)
 
 	RAKNET_DEBUG_PRINTF("Done. %i\n", btree.Size());
 	char ch[256];
-	Gets(ch, sizeof(ch));
+	fgets(ch, sizeof(ch), stdin);
 }
 */

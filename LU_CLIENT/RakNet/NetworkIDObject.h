@@ -1,31 +1,19 @@
-/*
- *  Original work: Copyright (c) 2014, Oculus VR, Inc.
- *  All rights reserved.
- *
- *  This source code is licensed under the BSD-style license found in the
- *  RakNet License.txt file in the licenses directory of this source tree. An additional grant 
- *  of patent rights can be found in the RakNet Patents.txt file in the same directory.
- *
- *
- *  Modified work: Copyright (c) 2017, SLikeSoft UG (haftungsbeschränkt)
- *
- *  This source code was modified by SLikeSoft. Modifications are licensed under the MIT-style
- *  license found in the license.txt file in the root directory of this source tree.
- */
-
 /// \file
 /// \brief A class you can derive from to make it easier to represent every networked object with an integer.  This way you can refer to objects over the network.
 ///
+/// This file is part of RakNet Copyright 2003 Jenkins Software LLC
+///
+/// Usage of RakNet is subject to the appropriate license agreement.
 
 
 #if !defined(__NETWORK_ID_GENERATOR)
 #define      __NETWORK_ID_GENERATOR
 
-#include "types.h"
-#include "memoryoverride.h"
+#include "RakNetTypes.h"
+#include "RakMemoryOverride.h"
 #include "Export.h"
 
-namespace SLNet
+namespace RakNet
 {
 /// Forward declarations
 class NetworkIDManager;
@@ -53,7 +41,7 @@ public:
 	virtual void SetNetworkIDManager( NetworkIDManager *manager);
 
 	/// Returns what was passed to SetNetworkIDManager
-	virtual NetworkIDManager * GetNetworkIDManager( void ) const;
+	virtual NetworkIDManager * GetNetworkIDManager( void );
 	
 	/// Returns the NetworkID that you can use to refer to this object over the network.
 	/// \pre You must first call SetNetworkIDManager before using this function
@@ -64,31 +52,18 @@ public:
 	/// Sets the NetworkID for this instance.  Usually this is called by the clients and determined from the servers.  However, if you save multiplayer games you would likely use
 	/// This on load as well.	
 	virtual void SetNetworkID( NetworkID id );
-
-	/// Your class does not have to derive from NetworkIDObject, although that is the easiest way to implement this.
-	/// If you want this to be a member object of another class, rather than inherit, then call SetParent() with a pointer to the parent class instance.
-	/// GET_OBJECT_FROM_ID will then return the parent rather than this instance.
-	virtual void SetParent( void *_parent );
-
-	/// Return what was passed to SetParent
-	/// \return The value passed to SetParent, or 0 if it was never called.
-	virtual void* GetParent( void ) const;
 	
 protected:
-
 	/// The  network ID of this object
-	// networkID is assigned when networkIDManager is set.
-	NetworkID networkID;	
+	NetworkID networkID;
+	
 	NetworkIDManager *networkIDManager;
-
-	/// The parent set by SetParent()
-	void *parent;
 
 	/// \internal, used by NetworkIDManager
 	friend class NetworkIDManager;
 	NetworkIDObject *nextInstanceForNetworkIDManager;
 };
 
-} // namespace SLNet
+} // namespace RakNet
 
 #endif

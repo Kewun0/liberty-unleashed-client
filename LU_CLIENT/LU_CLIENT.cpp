@@ -53,11 +53,11 @@
 #include "imgui/directx8/imgui_impl_win32.h"
 #include "imgui_impl_rw.h"
 #include "raknet/MessageIdentifiers.h"
-#include "raknet/peerinterface.h"
-#include "raknet/statistics.h"
-#include "raknet/types.h"
+#include "raknet/rakpeerinterface.h"
+#include "raknet/raknetstatistics.h"
+#include "raknet/raknettypes.h"
 #include "raknet/BitStream.h"
-#include "raknet/sleep.h"
+#include "raknet/RakSleep.h"
 #include "raknet/PacketLogger.h"
 
 #include <stdio.h>
@@ -77,14 +77,15 @@
 #pragma comment(lib,"ws2_32.lib")
 #pragma comment(lib,"winmm.lib") 
 #pragma comment(lib,"psapi.lib") 
-#pragma comment(lib,"slikenet.lib")
 
 extern unsigned char SCMData;
 
 BOOL					bWindowedMode = false;
 BOOL                    bChatEnabled = true;
 BOOL                    bImguiHooked = false;
-SLNet::RakPeerInterface* client;
+
+
+RakNet::RakPeerInterface* client;
 
 extern LRESULT ImGui_ImplRW_WndProcHandler(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -92,9 +93,9 @@ LRESULT __stdcall HookedWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
 WNDPROC OldWndProc = nullptr;
 HWND tWindow = nullptr;
- 
-char nickname[64]; 
-char ip[64]; 
+
+char nickname[64];
+char ip[64];
 char port[16];
 
 DWORD myPlayer = 0;
@@ -105,7 +106,7 @@ DWORD BarOldStateBlock = 0;
 DWORD BarNewStateBlock = 0;
 
 int64 last_sync_packet = 0;
- 
+
 bool IsConnectedToServer = false;
 
 BYTE byteCurPlayer = 0;
@@ -267,7 +268,7 @@ bool saveBitmap(LPCSTR filename, HBITMAP bmp, HPALETTE pal)
 
     if (!SUCCEEDED(res))
     {
-       // IUnknown_Release_Proxy(picture);
+        // IUnknown_Release_Proxy(picture);
 
         picture->lpVtbl->Release(picture);
 
@@ -275,7 +276,7 @@ bool saveBitmap(LPCSTR filename, HBITMAP bmp, HPALETTE pal)
     }
 
     LONG bytes_streamed;
-    res = picture->lpVtbl->SaveAsFile(picture,stream, true, &bytes_streamed);
+    res = picture->lpVtbl->SaveAsFile(picture, stream, true, &bytes_streamed);
 
     HANDLE file = CreateFile(filename, GENERIC_WRITE, FILE_SHARE_READ, 0,
         CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
@@ -364,7 +365,7 @@ struct ChatBox
     ImVector<char*>       Items;
     ImVector<const char*> Commands;
     ImVector<char*>       History;
-    int                   HistoryPos;  
+    int                   HistoryPos;
     ImGuiTextFilter       Filter;
     bool                  AutoScroll;
     bool                  ScrollToBottom;
@@ -416,7 +417,7 @@ struct ChatBox
     {
         ImGui::SetNextWindowSize(ImVec2(520, 500), ImGuiCond_FirstUseEver);
 
-        if (!ImGui::Begin(title, p_open, ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoTitleBar|ImGuiWindowFlags_NoBackground|ImGuiWindowFlags_NoScrollbar))
+        if (!ImGui::Begin(title, p_open, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar))
         {
             ImGui::End();
             return;
@@ -460,7 +461,7 @@ struct ChatBox
 
         ImGui::PopStyleVar();
         ImGui::EndChild();
-        
+
         bool reclaim_focus = false;
         ImGuiInputTextFlags input_text_flags = ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackCompletion | ImGuiInputTextFlags_CallbackHistory;
 
@@ -484,10 +485,10 @@ struct ChatBox
 
     void    ExecCommand(const char* command_line)
     {
-       
 
-        if (mouse == 1) { mouse = 0; } 
-        
+
+        if (mouse == 1) { mouse = 0; }
+
         HistoryPos = -1;
         for (int i = History.Size - 1; i >= 0; i--)
             if (Stricmp(History[i], command_line) == 0)
@@ -500,10 +501,10 @@ struct ChatBox
 
         if (Stricmp(command_line, "/q") == 0 || Stricmp(command_line, "/quit") == 0)
         {
-            
+
             if (IsConnectedToServer) {
                 client->Shutdown(250);
-                SLNet::RakPeerInterface::DestroyInstance(client);
+                RakNet::RakPeerInterface::DestroyInstance(client);
                 Sleep(250);
                 IsConnectedToServer = false;
             }
@@ -512,13 +513,13 @@ struct ChatBox
         char msg[255];
         sprintf(msg, "MESS%s", command_line);
 
-        if ( IsConnectedToServer ) client->Send(msg, strlen(msg) + 1, HIGH_PRIORITY, RELIABLE_ORDERED, 0, SLNet::UNASSIGNED_SYSTEM_ADDRESS, true);
+        if (IsConnectedToServer) client->Send(msg, strlen(msg) + 1, HIGH_PRIORITY, RELIABLE_ORDERED, 0, RakNet::UNASSIGNED_SYSTEM_ADDRESS, true);
 
         ScrollToBottom = true;
     }
     static int TextEditCallbackStub(ImGuiInputTextCallbackData* data)
     {
-        ChatBox * console = (ChatBox*)data->UserData;
+        ChatBox* console = (ChatBox*)data->UserData;
         return console->TextEditCallback(data);
     }
 
@@ -559,7 +560,7 @@ LRESULT __stdcall HookedWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 {
     ImGuiIO& io = ImGui::GetIO();
     io.MouseDrawCursor = false;
-    if (1==1)
+    if (1 == 1)
     {
         ImGui_ImplRW_WndProcHandler(hWnd, uMsg, wParam, lParam);
         return DefWindowProc(hWnd, uMsg, wParam, lParam);
@@ -629,7 +630,7 @@ NUDE CPlayerPed_ProcessControl_Hook()
     }
 }
 
-void InstallHook(DWORD dwInstallAddress, DWORD dwHookFunction, DWORD dwHookStorage,BYTE* pbyteJmpCode, int iJmpCodeSize)
+void InstallHook(DWORD dwInstallAddress, DWORD dwHookFunction, DWORD dwHookStorage, BYTE* pbyteJmpCode, int iJmpCodeSize)
 {
     DWORD dwVP, dwVP2;
     VirtualProtect((PVOID)dwHookStorage, 4, PAGE_EXECUTE_READWRITE, &dwVP);
@@ -870,7 +871,7 @@ void Timer::setInterval(Function function, int interval) {
     t.detach();
 }
 
-std::string GetLUID() 
+std::string GetLUID()
 {
     DWORD HddNumber = 0;
     if (GetVolumeInformation(NULL, NULL, NULL, &HddNumber, NULL, NULL, NULL, NULL))
@@ -921,14 +922,14 @@ LRESULT CALLBACK wnd_proc(HWND wnd, UINT umsg, WPARAM wparam, LPARAM lparam)
         rect.right = lr.x;
         rect.bottom = lr.y;
 
-        if (GetActiveWindow() == FindWindow(0,"GTA3"))
+        if (GetActiveWindow() == FindWindow(0, "GTA3"))
             ClipCursor(&rect);
         break;
     case WM_KEYUP:
         if (wparam < 256)
-           
+
             io.KeysDown[wparam] = 0;
-        
+
         break;
     case WM_MOUSEHOVER:
         break;
@@ -941,7 +942,7 @@ LRESULT CALLBACK wnd_proc(HWND wnd, UINT umsg, WPARAM wparam, LPARAM lparam)
             io.KeysDown[wparam] = 1;
     }
     }
-    if (ImGui_ImplWin32_WndProcHandler(wnd, umsg, wparam, lparam)&&mouse==1) return 0;
+    if (ImGui_ImplWin32_WndProcHandler(wnd, umsg, wparam, lparam) && mouse == 1) return 0;
 
     return CallWindowProc(orig_wndproc, wnd, umsg, wparam, lparam);
 }
@@ -1028,7 +1029,7 @@ BOOL CALLBACK EnumWindowsCallback(HWND handle, LPARAM lParam)
         return TRUE; // skip to next window
 
     window = handle;
-    return FALSE; 
+    return FALSE;
 }
 
 HWND GetProcessWindow()
@@ -1073,7 +1074,7 @@ void FullScreenSwitch()
     SetWindowLong(HWNDWindow, GWL_EXSTYLE, HWNDStyleEx);
     ShowWindow(HWNDWindow, SW_SHOWNORMAL);
     SetWindowPlacement(HWNDWindow, &wpc);
-    
+
 }
 
 void InitSettings()
@@ -1085,7 +1086,7 @@ void InitSettings()
         if (*szCmdLine == '-' || *szCmdLine == '/')
         {
             szCmdLine++;
-            if (*szCmdLine=='h')
+            if (*szCmdLine == 'h')
             {
                 szCmdLine++;
                 SetStringFromCommandLine(szCmdLine, ip);
@@ -1145,19 +1146,19 @@ void RenderChatbox()
             io.MouseDrawCursor = true;
         }
         else { io.MouseDrawCursor = false; }
-        
+
         p_ChatBox.Draw("Chatbox", NULL);
 
-       /* if (KeyPressed(VK_TAB) && GetActiveWindow() == FindWindow(0,"GTA3"))
-        {
-            ImGui::SetNextWindowPosCenter();
-            ImGui::SetNextWindowSize(ImVec2(256, 320));
-            ImGui::Begin("Scoreboard",NULL,ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoTitleBar|ImGuiWindowFlags_NoResize);
+        /* if (KeyPressed(VK_TAB) && GetActiveWindow() == FindWindow(0,"GTA3"))
+         {
+             ImGui::SetNextWindowPosCenter();
+             ImGui::SetNextWindowSize(ImVec2(256, 320));
+             ImGui::Begin("Scoreboard",NULL,ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoTitleBar|ImGuiWindowFlags_NoResize);
 
-           
-            //ImGui_ProgressBar(" ", FindPlayerPed()->m_fHealth, 0, 100, "  ",ImVec2(50,5),ImVec4(0.0f,1.0f,0.0f,1.0f), ImVec4(1.0f, 0.0f, 0.0f, 1.0f), ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
-            ImGui::End();
-        }*/
+
+             //ImGui_ProgressBar(" ", FindPlayerPed()->m_fHealth, 0, 100, "  ",ImVec2(50,5),ImVec4(0.0f,1.0f,0.0f,1.0f), ImVec4(1.0f, 0.0f, 0.0f, 1.0f), ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
+             ImGui::End();
+         }*/
 
         ImGui::EndFrame();
         ImGui::Render();
@@ -1182,15 +1183,15 @@ __declspec(naked) void CreatePlayer()
     }
 }
 
-unsigned char GetPacketIdentifier(SLNet::Packet* p)
+unsigned char GetPacketIdentifier(RakNet::Packet* p)
 {
     if (p == 0)
         return 255;
 
     if ((unsigned char)p->data[0] == ID_TIMESTAMP)
     {
-        RakAssert(p->length > sizeof(SLNet::MessageID) + sizeof(SLNet::Time));
-        return (unsigned char)p->data[sizeof(SLNet::MessageID) + sizeof(SLNet::Time)];
+        RakAssert(p->length > sizeof(RakNet::MessageID) + sizeof(RakNet::Time));
+        return (unsigned char)p->data[sizeof(RakNet::MessageID) + sizeof(RakNet::Time)];
     }
     else
         return (unsigned char)p->data[0];
@@ -1217,11 +1218,11 @@ void ProcessPacket(unsigned char* data)
     }
 }
 
-void onGiveWeaponPacket(SLNet::Packet* p)
+void onGiveWeaponPacket(RakNet::Packet* p)
 {
-    SLNet::RakString rs;
-    SLNet::BitStream bsIn(p->data, p->length, false);
-    bsIn.IgnoreBytes(sizeof(SLNet::MessageID));
+    RakNet::RakString rs;
+    RakNet::BitStream bsIn(p->data, p->length, false);
+    bsIn.IgnoreBytes(sizeof(RakNet::MessageID));
     bsIn.Read(rs);
     char data[16];
     sprintf(data, "%s", rs.C_String());
@@ -1230,37 +1231,37 @@ void onGiveWeaponPacket(SLNet::Packet* p)
     int wep = atoi(pch);
     pch = strtok(NULL, " ");
     int ammo = atoi(pch);
-    if ( FindPlayerPed() ) FindPlayerPed()->GiveWeapon((eWeaponType)wep, ammo);
+    if (FindPlayerPed()) FindPlayerPed()->GiveWeapon((eWeaponType)wep, ammo);
 }
 
 void SendOnFootSync()
-{ 
+{
     if (FindPlayerPed() && IsConnectedToServer == 1 && !FindPlayerPed()->m_pVehicle)
     {
         printf("SEx\n");
-        SLNet::BitStream bsOut;
-        bsOut.Write((SLNet::MessageID)ID_LUMSG2);
+        RakNet::BitStream bsOut;
+        bsOut.Write((RakNet::MessageID)ID_LUMSG2);
         char package[255];
-        sprintf(package, "%f %f %f %f %f %f %i", FindPlayerPed()->GetPosition().x, FindPlayerPed()->GetPosition().y, FindPlayerPed()->GetPosition().z,FindPlayerPed()->GetHeading(),FindPlayerPed()->m_fHealth,FindPlayerPed()->m_fArmour,FindPlayerPed()->m_nWepSlot);
+        sprintf(package, "%f %f %f %f %f %f %i", FindPlayerPed()->GetPosition().x, FindPlayerPed()->GetPosition().y, FindPlayerPed()->GetPosition().z, FindPlayerPed()->GetHeading(), FindPlayerPed()->m_fHealth, FindPlayerPed()->m_fArmour, FindPlayerPed()->m_nWepSlot);
         bsOut.Write(package);
-        client->Send(&bsOut, HIGH_PRIORITY, RELIABLE_ORDERED, 0, SLNet::UNASSIGNED_SYSTEM_ADDRESS, true);
+        client->Send(&bsOut, HIGH_PRIORITY, RELIABLE_ORDERED, 0, RakNet::UNASSIGNED_SYSTEM_ADDRESS, true);
     }
 }
 
 DWORD WINAPI LUThread(HMODULE hMod)
 {
-    SLNet::RakNetStatistics* rss;
-    client = SLNet::RakPeerInterface::GetInstance();
-    SLNet::Packet* p;
+    RakNet::RakNetStatistics* rss;
+    client = RakNet::RakPeerInterface::GetInstance();
+    RakNet::Packet* p;
     unsigned char packetIdentifier;
-    SLNet::SystemAddress clientID = SLNet::UNASSIGNED_SYSTEM_ADDRESS;
+    RakNet::SystemAddress clientID = RakNet::UNASSIGNED_SYSTEM_ADDRESS;
     client->AllowConnectionResponseIPMigration(false);
-    SLNet::SocketDescriptor socketDescriptor(static_cast<unsigned short>(rand()%65534), 0);
-    socketDescriptor.socketFamily = AF_INET;
+    RakNet::SocketDescriptor socketDescriptor(static_cast<unsigned short>(rand() % 65534), 0);
+    
     client->Startup(8, &socketDescriptor, 1);
     client->SetOccasionalPing(true);
-    SLNet::ConnectionAttemptResult car = client->Connect(ip, static_cast<unsigned short>(atoi(port)),0,0);
-    RakAssert(car == SLNet::CONNECTION_ATTEMPT_STARTED);
+    RakNet::ConnectionAttemptResult car = client->Connect(ip, static_cast<unsigned short>(atoi(port)), 0, 0);
+    RakAssert(car == RakNet::CONNECTION_ATTEMPT_STARTED);
     for (;;)
     {
         Sleep(30);
@@ -1281,7 +1282,7 @@ DWORD WINAPI LUThread(HMODULE hMod)
                 break;
             case ID_INCOMPATIBLE_PROTOCOL_VERSION:
                 printf("ID_INCOMPATIBLE_PROTOCOL_VERSION\n");
-                break; 
+                break;
             case ID_REMOTE_DISCONNECTION_NOTIFICATION: // Server telling the clients of another client disconnecting gracefully.  You can manually broadcast this in a peer to peer enviroment if you want.
                 printf("ID_REMOTE_DISCONNECTION_NOTIFICATION\n");
                 break;
@@ -1311,8 +1312,8 @@ DWORD WINAPI LUThread(HMODULE hMod)
                 p_ChatBox.AddLog("You have entered an invalid password");
                 break;
 
-            case ID_CONNECTION_LOST: 
-                IsConnectedToServer =false;
+            case ID_CONNECTION_LOST:
+                IsConnectedToServer = false;
                 p_ChatBox.AddLog("You have lost connection to the server");
                 printf("ID_CONNECTION_LOST\n");
                 break;
@@ -1324,10 +1325,10 @@ DWORD WINAPI LUThread(HMODULE hMod)
                 p_ChatBox.AddLog("Connection successful. Loading server data");
                 char Nick[64];
                 sprintf(Nick, "NAME%s", nickname);
-                client->Send(Nick, strlen(Nick) + 1, HIGH_PRIORITY, RELIABLE_ORDERED, 0, SLNet::UNASSIGNED_SYSTEM_ADDRESS, true);
+                client->Send(Nick, strlen(Nick) + 1, HIGH_PRIORITY, RELIABLE_ORDERED, 0, RakNet::UNASSIGNED_SYSTEM_ADDRESS, true);
                 char LUID[32];
                 sprintf(LUID, "LUID%s", GetLUID().c_str());
-                client->Send(LUID, strlen(LUID) + 1, HIGH_PRIORITY, RELIABLE_ORDERED, 0, SLNet::UNASSIGNED_SYSTEM_ADDRESS, true);
+                client->Send(LUID, strlen(LUID) + 1, HIGH_PRIORITY, RELIABLE_ORDERED, 0, RakNet::UNASSIGNED_SYSTEM_ADDRESS, true);
                 break;
             case ID_CONNECTED_PING:
 
@@ -1394,7 +1395,7 @@ public:
         patch::Nop(0x582E6C, 5); // Disable Island Load screen 3
         patch::Nop(0x4882CA, 5); // Unblock resolution
         *(INT*)0x8F4374 = 9999; // Infinite FPS (speed up loading)
-       
+
         char stream[8];
         sprintf(stream, "Cd%i", rand() % 1024);
         auto Pointer = (DWORD*)0x5EC034;
@@ -1402,21 +1403,21 @@ public:
 
         Hook((void*)0x48C334, CreatePlayer, 5);
 
-        if (debug == 1) 
+        if (debug == 1)
         {
             AllocConsole();
             freopen("CONOUT$", "w", stdout);
         }
 
         Events::initRwEvent += []
-        { 
+        {
             srand(time(NULL));
             CPad::GetPad(0)->NewKeyState.enter = 255;
             CPad::GetPad(0)->NewKeyState.enter = 0;
             CPad::GetPad(0)->NewMouseControllerState.lmb = 255;
             GameKeyStatesInit();
             InstallMethodHook(0x5FA308, (DWORD)CPlayerPed_ProcessControl_Hook);
-            
+
             char loadsc4[9] = "mainsc1";
 
             if (fopen("txd\\lu.txd", "r") != NULL)
@@ -1437,19 +1438,19 @@ public:
 
         Events::shutdownRwEvent += []
         {
-            if ( bImguiHooked ) ImGui_ImplRenderWare_ShutDown();
+            if (bImguiHooked) ImGui_ImplRenderWare_ShutDown();
         };
 
         Events::drawingEvent += []
         {
-            if ( bImguiHooked && GetActiveWindow() == FindWindowA(NULL,"GTA3")) RenderChatbox();
+            if (bImguiHooked && GetActiveWindow() == FindWindowA(NULL, "GTA3")) RenderChatbox();
         };
 
         Events::processScriptsEvent += []
         {
             if (IsDebuggerPresent()) exit(-1);
             if (KeyPressed(VK_ESCAPE)) paused = 1;
-            if (KeyPressed('T')) { if (mouse == 0&&bChatEnabled) { mouse = 1; } }
+            if (KeyPressed('T')) { if (mouse == 0 && bChatEnabled) { mouse = 1; } }
             if (KeyPressed(VK_F12))
             {
                 char filename[256];
@@ -1458,14 +1459,14 @@ public:
                 p_ChatBox.AddLog("Screenshot saved as %s", filename);
                 Sleep(100);
             }
-            
+
             if (FindPlayerPed())
             {
                 FindPlayerPed()->m_nPedType = 1;
             }
 
             *(BYTE*)0x5F2E60 = 1;
-            
+
             if (m_gameStarted == 0)
             {
                 *(INT*)0x8F4374 = 30;
@@ -1489,15 +1490,15 @@ public:
                     bImguiHooked = true;
                 }
                 Command<0x3F7>(0);
-                Command<0x15F>(750.0,750.0, 250.0, 0.0, 0.1);
-                Command<0x160>(685.25,600.0,230.0, 2);
+                Command<0x15F>(750.0, 750.0, 250.0, 0.0, 0.1);
+                Command<0x160>(685.25, 600.0, 230.0, 2);
                 Command<0x1B4>(0, false);
-                
+
                 m_gameStarted = 1;
                 IsConnectedToServer = false;
 
                 CWorld::Players[0].m_bInfiniteSprint = true;
-                
+
                 CloseHandle(CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)LUThread, NULL, 0, nullptr));
             }
         };

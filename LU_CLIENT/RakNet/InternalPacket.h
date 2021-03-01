@@ -1,38 +1,31 @@
-/*
- *  Original work: Copyright (c) 2014, Oculus VR, Inc.
- *  All rights reserved.
- *
- *  This source code is licensed under the BSD-style license found in the
- *  RakNet License.txt file in the licenses directory of this source tree. An additional grant 
- *  of patent rights can be found in the RakNet Patents.txt file in the same directory.
- *
- *
- *  Modified work: Copyright (c) 2017, SLikeSoft UG (haftungsbeschränkt)
- *
- *  This source code was modified by SLikeSoft. Modifications are licensed under the MIT-style
- *  license found in the license.txt file in the root directory of this source tree.
- */
-
 /// \file
 /// \brief \b [Internal] A class which stores a user message, and all information associated with sending and receiving that message.
 ///
+/// This file is part of RakNet Copyright 2003 Jenkins Software LLC
+///
+/// Usage of RakNet is subject to the appropriate license agreement.
+/// Creative Commons Licensees are subject to the
+/// license found at
+/// http://creativecommons.org/licenses/by-nc/2.5/
+/// Single application licensees are subject to the license found at
+/// http://www.jenkinssoftware.com/SingleApplicationLicense.html
+/// Custom license users are subject to the terms therein.
+/// GPL license users are subject to the GNU General Public
+/// License as published by the Free
+/// Software Foundation; either version 2 of the License, or (at your
+/// option) any later version.
 
 #ifndef __INTERNAL_PACKET_H
 #define __INTERNAL_PACKET_H
 
 #include "PacketPriority.h"
-#include "types.h"
-#include "memoryoverride.h"
-#include "defines.h"
-#include "NativeTypes.h"
-#include "defines.h"
-#if USE_SLIDING_WINDOW_CONGESTION_CONTROL!=1
+#include "RakNetTypes.h"
+#include "RakMemoryOverride.h"
+#include "RakNetDefines.h"
 #include "CCRakNetUDT.h"
-#else
-#include "CCRakNetSlidingWindow.h"
-#endif
+#include "NativeTypes.h"
 
-namespace SLNet {
+namespace RakNet {
 
 typedef uint16_t SplitPacketIdType;
 typedef uint32_t SplitPacketIndexType;
@@ -45,16 +38,14 @@ typedef uint24_t MessageNumberType;
 /// were to wrap, the newly wrapped values would no longer be in use.  Warning: Too large of a value wastes bandwidth!
 typedef MessageNumberType OrderingIndexType;
 
-typedef SLNet::TimeUS RemoteSystemTimeType;
+typedef RakNet::TimeUS RemoteSystemTimeType;
 
 struct InternalPacketFixedSizeTransmissionHeader
 {
 	/// A unique numerical identifier given to this user message. Used to identify reliable messages on the network
 	MessageNumberType reliableMessageNumber;
-	///The ID used as identification for ordering messages. Also included in sequenced messages
+	///The ID used as identification for ordering channels
 	OrderingIndexType orderingIndex;
-	// Used only with sequenced messages
-	OrderingIndexType sequencingIndex;
 	///What ordering channel this packet is on, if the reliability type uses ordering channels
 	unsigned char orderingChannel;
 	///The ID of the split packet, if we have split packets.  This is the maximum number of split messages we can send simultaneously per connection.
@@ -92,11 +83,9 @@ struct InternalPacket : public InternalPacketFixedSizeTransmissionHeader
 	/// Was this packet number used this update to track windowing drops or increases?  Each packet number is only used once per update.
 //	bool allowWindowUpdate;
 	///When this packet was created
-	SLNet::TimeUS creationTime;
+	RakNet::TimeUS creationTime;
 	///The resendNext time to take action on this packet
-	SLNet::TimeUS nextActionTime;
-	// For debugging
-	SLNet::TimeUS retransmissionTime;
+	RakNet::TimeUS nextActionTime;
 	// Size of the header when encoded into a bitstream
 	BitSize_t headerLength;
 	/// Buffer is a pointer to the actual data, assuming this packet has data at all
@@ -108,11 +97,7 @@ struct InternalPacket : public InternalPacketFixedSizeTransmissionHeader
 		NORMAL,
 
 		/// data points to a larger block of data, where the larger block is reference counted. internalPacketRefCountedData is used in this case
-		REF_COUNTED,
-	
-		/// If allocation scheme is STACK, data points to stackData and should not be deallocated
-		/// This is only used when sending. Received packets are deallocated in RakPeer
-		STACK
+		REF_COUNTED
 	} allocationScheme;
 	InternalPacketRefCountedData *refCountedData;
 	/// How many attempts we made at sending this message
@@ -125,11 +110,9 @@ struct InternalPacket : public InternalPacketFixedSizeTransmissionHeader
 	// Used for the resend queue
 	// Linked list implementation so I can remove from the list via a pointer, without finding it in the list
 	InternalPacket *resendPrev, *resendNext,*unreliablePrev,*unreliableNext;
-
-	unsigned char stackData[128];
 };
 
-} // namespace SLNet
+} // namespace RakNet
 
 #endif
 

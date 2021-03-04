@@ -1330,7 +1330,7 @@ DWORD WINAPI LUThread(HMODULE hMod)
 
             case ID_CONNECTION_REQUEST_ACCEPTED:
                 IsConnectedToServer = true;
-                Command<0x15A>();
+                Command<0x2EB>();
                 Command<0x1B4>(0, true);
                 p_ChatBox.AddLog("Connection successful. Loading server data");
                 char Nick[64];

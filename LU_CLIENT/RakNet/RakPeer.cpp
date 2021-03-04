@@ -1263,7 +1263,7 @@ Packet* RakPeer::Receive( void )
 					messageHandlerList[i]->OnFailedConnectionAttempt(packet, FCAR_PUBLIC_KEY_MISMATCH);
 					break;
 				case ID_ALREADY_CONNECTED:
-					messageHandlerList[i]->OnFailedConnectionAttempt(packet, FCAR_ALREADY_CONNECTED);
+				//	messageHandlerList[i]->OnFailedConnectionAttempt(packet, FCAR_ALREADY_CONNECTED);
 					break;
 				case ID_NO_FREE_INCOMING_CONNECTIONS:
 					messageHandlerList[i]->OnFailedConnectionAttempt(packet, FCAR_NO_FREE_INCOMING_CONNECTIONS);

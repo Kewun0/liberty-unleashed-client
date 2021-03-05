@@ -1,4 +1,4 @@
-# liberty-unleashed-client
+# Liberty Unleashed Reborn
 
 Liberty Unleashed Reborn is a multiplayer mod for GTA III 1 .0
 
